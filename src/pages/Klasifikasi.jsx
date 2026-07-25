@@ -34,28 +34,40 @@ export default function Klasifikasi() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Klasifikasi Surat</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center">
+      {/* Header Responsif */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Klasifikasi Surat</h1>
+        <button 
+          onClick={() => setShowModal(true)} 
+          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center justify-center transition-colors"
+        >
           <Plus className="w-4 h-4 mr-2" /> Tambah Klasifikasi
         </button>
       </div>
 
-      <div className="flex gap-4 mb-4 bg-white p-4 rounded shadow-sm">
+      {/* Search Bar Responsif */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-4 bg-white p-4 rounded shadow-sm">
         <div className="flex-1 flex items-center border rounded px-3">
-          <Search className="w-5 h-5 text-gray-400 mr-2" />
-          <input type="text" placeholder="Cari..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full py-2 outline-none" />
+          <Search className="w-5 h-5 text-gray-400 mr-2 shrink-0" />
+          <input 
+            type="text" 
+            placeholder="Cari..." 
+            value={search} 
+            onChange={(e) => setSearch(e.target.value)} 
+            className="w-full py-2 outline-none" 
+          />
         </div>
       </div>
 
-      <div className="bg-white rounded shadow">
-        <table className="w-full text-sm text-left">
+      {/* Tabel Responsif (Bisa scroll horizontal di layar kecil) */}
+      <div className="bg-white rounded shadow overflow-x-auto">
+        <table className="w-full text-sm text-left min-w-[400px]">
           <thead className="bg-gray-100 border-b">
             <tr>
-              <th className="p-3">No</th>
-              <th className="p-3">Klasifikasi Kode Arsip</th>
-              <th className="p-3">Subklasifikasi</th>
-              <th className="p-3">Kode Klasifikasi</th>
+              <th className="p-3 whitespace-nowrap">No</th>
+              <th className="p-3 whitespace-nowrap">Klasifikasi Kode Arsip</th>
+              <th className="p-3 whitespace-nowrap">Subklasifikasi</th>
+              <th className="p-3 whitespace-nowrap">Kode Klasifikasi</th>
             </tr>
           </thead>
           <tbody>
@@ -85,27 +97,53 @@ export default function Klasifikasi() {
         </table>
       </div>
 
+      {/* Modal Form Responsif */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="text-xl font-bold">Tambah Klasifikasi</h2>
-              <button onClick={() => setShowModal(false)} className="hover:bg-gray-100 p-1 rounded"><X className="w-6 h-6" /></button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md my-8">
+            <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg">
+              <h2 className="text-lg md:text-xl font-bold">Tambah Klasifikasi</h2>
+              <button onClick={() => setShowModal(false)} className="hover:bg-gray-100 p-1 rounded">
+                <X className="w-6 h-6" />
+              </button>
             </div>
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Klasifikasi Kode Arsip</label>
-                <input type="text" required value={formData.klasifikasi_kode_arsip} onChange={(e) => setFormData({...formData, klasifikasi_kode_arsip: e.target.value})} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.klasifikasi_kode_arsip} 
+                  onChange={(e) => setFormData({...formData, klasifikasi_kode_arsip: e.target.value})} 
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Subklasifikasi</label>
-                <input type="text" required value={formData.subklasifikasi} onChange={(e) => setFormData({...formData, subklasifikasi: e.target.value})} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.subklasifikasi} 
+                  onChange={(e) => setFormData({...formData, subklasifikasi: e.target.value})} 
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Kode Klasifikasi</label>
-                <input type="text" required value={formData.kode_klasifikasi} onChange={(e) => setFormData({...formData, kode_klasifikasi: e.target.value})} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.kode_klasifikasi} 
+                  onChange={(e) => setFormData({...formData, kode_klasifikasi: e.target.value})} 
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
               </div>
-              <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Simpan</button>
+              <button 
+                type="submit" 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded transition-colors"
+              >
+                Simpan
+              </button>
             </form>
           </div>
         </div>
