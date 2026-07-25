@@ -90,8 +90,8 @@ export default function Login() {
             <img src="/image/logo_bps.png" alt="Logo BPS" className="w-full h-full object-contain" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-wide leading-none">SIMPATI</h1>
-            <p className="text-[11px] text-slate-400 mt-1">BPS Kab. Tanjung Jabung Barat</p>
+            <h1 className="text-xl font-bold tracking-wide leading-none">SIMPATI</h1>
+            <p className="text-[13px] text-slate-300 mt-1">BPS Kab. Tanjung Jabung Barat</p>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Eye, X, FileText } from 'lucide-react';
+import { Download, Eye, X, FileText, AlertCircle } from 'lucide-react';
 import mammoth from 'mammoth';
 
 // PENTING: sesuaikan dengan lokasi folder di public.
@@ -46,6 +46,7 @@ export default function TemplateSurat() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+  const [previewFile, setPreviewFile] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [downloadingFile, setDownloadingFile] = useState(null);
@@ -82,6 +83,7 @@ export default function TemplateSurat() {
   const handlePreview = async (file, name) => {
     setShowPreview(true);
     setPreviewTitle(name);
+    setPreviewFile(file);
     setLoadingPreview(true);
     setPreviewHtml('');
     setErrorMsg('');
@@ -106,36 +108,36 @@ export default function TemplateSurat() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Template Surat</h1>
-      <div className="bg-white rounded shadow overflow-hidden overflow-x-auto">
+      <h1 className="text-2xl font-bold mb-6 text-[#101828]">Template Surat</h1>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm text-left">
-          <thead className="bg-gray-100 border-b">
+          <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
-              <th className="p-3 w-16">No</th>
-              <th className="p-3">Format Surat</th>
-              <th className="p-3 text-right w-48">Aksi</th>
+              <th className="p-3 w-16 text-slate-500 font-semibold">No</th>
+              <th className="p-3 text-slate-500 font-semibold">Format Surat</th>
+              <th className="p-3 text-right w-48 text-slate-500 font-semibold">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {templates.map((tpl) => (
-              <tr key={tpl.no} className="border-b hover:bg-gray-50">
+              <tr key={tpl.no} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                 <td className="p-3">{tpl.no}</td>
                 <td className="p-3 flex items-center text-gray-800 font-medium">
-                  <FileText className="w-4 h-4 mr-2 text-blue-500 shrink-0" />
+                  <FileText className="w-4 h-4 mr-2 text-[#C08A34] shrink-0" />
                   {tpl.name}
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => handlePreview(tpl.file, tpl.name)}
-                      className="inline-flex items-center bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs transition-colors"
+                      className="inline-flex items-center bg-[#0E2338] hover:bg-[#163654] text-white px-3 py-1.5 rounded-lg text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34] focus-visible:ring-offset-1"
                     >
                       <Eye className="w-4 h-4 mr-1" /> Preview
                     </button>
                     <button
                       onClick={() => handleDownload(tpl.file)}
                       disabled={downloadingFile === tpl.file}
-                      className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                      className="inline-flex items-center bg-[#C08A34] hover:bg-[#AD7A2C] text-white px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E2338] focus-visible:ring-offset-1"
                     >
                       <Download className="w-4 h-4 mr-1" />
                       {downloadingFile === tpl.file ? 'Mengunduh...' : 'Download'}
@@ -148,39 +150,89 @@ export default function TemplateSurat() {
         </table>
       </div>
 
+      {/* ===== Preview — full screen, dokumen ditampilkan sepenuh 1 halaman A4 ===== */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
-              <h2 className="text-xl font-bold flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-blue-600" />
-                {previewTitle}
-              </h2>
-              <button onClick={() => setShowPreview(false)} className="hover:bg-gray-100 p-1 rounded">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm simpati-fade-in">
+          {/* Toolbar atas */}
+          <div className="flex justify-between items-center px-4 sm:px-6 py-3 bg-[#0E2338] text-white shrink-0 shadow-lg z-10">
+            <h2 className="text-base sm:text-lg font-bold flex items-center min-w-0">
+              <FileText className="w-5 h-5 mr-2 text-[#E9C97A] shrink-0" />
+              <span className="truncate">{previewTitle}</span>
+            </h2>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleDownload(previewFile)}
+                disabled={downloadingFile === previewFile}
+                className="hidden sm:inline-flex items-center bg-[#C08A34] hover:bg-[#AD7A2C] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                {downloadingFile === previewFile ? 'Mengunduh...' : 'Download'}
+              </button>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="hover:bg-white/10 p-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                aria-label="Tutup preview"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto bg-gray-50 flex-1">
-              {loadingPreview ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500 mb-4"></div>
-                  <p className="text-gray-500">Memuat isi dokumen...</p>
-                </div>
-              ) : errorMsg ? (
-                <div className="bg-red-50 text-red-600 p-4 rounded text-center whitespace-pre-wrap">
-                  {errorMsg}
-                </div>
-              ) : (
+          </div>
+
+          {/* Area halaman dokumen — dibuat berukuran A4 sesungguhnya, bukan kotak modal kecil */}
+          <div className="flex-1 overflow-auto bg-slate-300 py-8 px-4">
+            {loadingPreview ? (
+              <div className="flex flex-col items-center justify-center py-24">
+                <div className="w-12 h-12 rounded-full border-4 border-[#0E2338]/20 border-t-[#0E2338] animate-spin mb-4"></div>
+                <p className="text-slate-100 text-sm">Memuat isi dokumen&hellip;</p>
+              </div>
+            ) : errorMsg ? (
+              <div className="max-w-lg mx-auto bg-white border border-red-100 text-red-700 p-5 rounded-xl text-sm flex items-start gap-3 shadow-lg">
+                <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                <span className="whitespace-pre-wrap">{errorMsg}</span>
+              </div>
+            ) : (
+              <div className="mx-auto w-full overflow-x-auto">
                 <div
-                  className="bg-white p-8 md:p-12 shadow-md mx-auto max-w-3xl prose prose-sm sm:prose-base lg:prose-lg max-w-none"
+                  className="simpati-a4-page mx-auto bg-white shadow-2xl prose prose-sm sm:prose-base max-w-none simpati-page-in"
                   style={{ fontFamily: 'Times New Roman, serif', lineHeight: '1.5' }}
                   dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      <style>{`
+        /* Ukuran A4 asli (21cm x 29.7cm) dengan margin standar dokumen resmi ~2.5cm */
+        .simpati-a4-page {
+          width: 21cm;
+          min-height: 29.7cm;
+          padding: 2.5cm;
+        }
+        @media (max-width: 900px) {
+          .simpati-a4-page {
+            width: 100%;
+            min-width: 21cm;
+          }
+        }
+
+        @keyframes simpatiFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .simpati-fade-in { animation: simpatiFadeIn 0.25s ease-out; }
+
+        @keyframes simpatiPageIn {
+          from { opacity: 0; transform: translateY(12px) scale(0.99); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .simpati-page-in { animation: simpatiPageIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .simpati-fade-in, .simpati-page-in {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

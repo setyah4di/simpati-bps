@@ -60,34 +60,41 @@ export default function Layout({ children }) {
           <X className="w-5 h-5" />
         </button>
 
+  {/* Logo BPS & Nama Instansi */}
+        {/* <div className="flex items-center gap-2 px-4 pt-4 border-b border-white/10">
+          <img
+            src="/image/logo_bps.png"
+            alt="Logo BPS"
+            className="w-8 h-8 object-contain shrink-0 opacity-90"
+          />
+          <div className="text-[13px] leading-tight">
+            <span className="block text-slate-200 font-semibold">Badan Pusat Statistik</span>
+            <span className="block text-slate-400">Tanjung Jabung Barat</span>
+          </div>
+        </div> */}
+
         {/* Brand */}
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-            <Building2 className="w-5 h-5 text-white" />
+        <div className="flex items-center gap-3 px-6 pt-6 border-b border-white/10 shrink-0">
+          <div className="w-10 h-10 rounded-xl  flex items-center justify-center shrink-0">
+            {/* <Building2 className="w-5 h-5 text-white" /> */}
+             <img
+            src="/image/logo_bps.png"
+            alt="Logo BPS"
+            className="w-8 h-8 object-contain shrink-0 opacity-90"
+          />
           </div>
           <div className="min-w-0">
             <h1 className="text-base text-xl font-bold tracking-wide leading-none">SIMPATI</h1>
-            <p className="text-[13px] text-slate-400 leading-snug mt-1">
+            <p className="text-[13px] text-slate-300 leading-snug mt-1">
               Sistem Informasi Manajemen Persuratan Terintegrasi
             </p>
           </div>
         </div>
         
-          <div className="flex items-center gap-2 px-2 py-2">
-            <img
-              src="/image/logo_bps.png"
-              alt="Logo BPS"
-              className="w-6 h-6 object-contain shrink-0 opacity-90"
-            />
-            <p className="text-[11px] text-slate-400 leading-snug">
-              <span className="text-slate-200 font-semibold">BPS Kabupaten Tanjung Jabung Barat</span>
-            </p>
-          </div>
-
-
+      
         {/* Navigasi */}
         <nav className="flex-1 overflow-y-auto px-3 py-5">
-          <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <p className="px-3 mb-2 text-[13px] font-semibold uppercase tracking-wider text-slate-400">
             Menu Utama
           </p>
           <div className="space-y-1">
