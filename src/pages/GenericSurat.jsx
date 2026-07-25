@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiRequest } from '../api';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
 import { Plus, Search, X, Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
 
@@ -10,14 +10,12 @@ const SearchableSelect = ({ value, onChange, options, placeholder, disabled }) =
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Filter opsi berdasarkan teks pencarian
   const filteredOptions = options.filter(opt =>
     String(opt).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="relative">
-      {/* Tombol Dropdown */}
       <div
         className={`w-full p-2 border rounded-lg flex items-center justify-between cursor-pointer transition-colors ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-[#C08A34]'}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -28,15 +26,10 @@ const SearchableSelect = ({ value, onChange, options, placeholder, disabled }) =
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
-      {/* Area Dropdown (Muncul ke ATAS saat isOpen) */}
       {isOpen && !disabled && (
         <>
-          {/* Overlay transparan untuk menutup dropdown saat klik di luar */}
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)}></div>
-
-          {/* Panel muncul di atas (bottom-full mb-1) */}
           <div className="absolute z-20 bottom-full mb-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg flex flex-col simpati-pop-in">
-            {/* Daftar Opsi (bisa di-scroll, urutan normal dari atas) */}
             <div className="max-h-60 overflow-auto">
               <ul className="py-1">
                 {filteredOptions.length === 0 ? (
@@ -58,8 +51,6 @@ const SearchableSelect = ({ value, onChange, options, placeholder, disabled }) =
                 )}
               </ul>
             </div>
-
-            {/* Input Pencarian (menempel di bawah dropdown) */}
             <div className="border-t p-2 bg-white">
               <div className="flex items-center border rounded-lg px-2 border-slate-200">
                 <Search className="w-4 h-4 text-gray-400 mr-1" />
@@ -245,21 +236,22 @@ export default function GenericSurat({ type, title }) {
 
   const fetchData = async () => {
     setLoading(true);
-    const res = await apiRequest({ action: 'getAll', sheet: type });
-    if (res.success) {
-      const sortedData = res.data.sort((a, b) => {
-        const idA = parseInt(a.id, 10) || 0;
-        const idB = parseInt(b.id, 10) || 0;
-        return idB - idA;
-      });
-      setData(sortedData);
-    }
+    const { data: resData, error } = await supabase
+      .from(type)
+      .select('*')
+      .order('id', { ascending: false });
+      
+    if (!error) setData(resData || []);
     setLoading(false);
   };
 
   const fetchKlasifikasi = async () => {
-    const res = await apiRequest({ action: 'getAll', sheet: 'klasifikasi' });
-    if (res.success) setKlasifikasiData(res.data);
+    const { data: resData, error } = await supabase
+      .from('klasifikasi')
+      .select('*')
+      .order('id', { ascending: true });
+      
+    if (!error) setKlasifikasiData(resData || []);
   };
 
   useEffect(() => {
@@ -288,10 +280,16 @@ export default function GenericSurat({ type, title }) {
 
     let payloadData = { ...formData };
 
+    // Generate Kode Klasifikasi
     if (!config.formFields.some(f => f.name === 'kode_klasifikasi') && config.tableColumns.includes('kode_klasifikasi')) {
       payloadData.kode_klasifikasi = generateKodeKlasifikasi(payloadData.klasifikasi_kode_arsip, payloadData.subklasifikasi);
     }
 
+    // Isi otomatis nama pengaju / pelaksana dari data user yang login
+    if (type === 'surat_keluar') payloadData.nama_pengaju_surat = user?.nama;
+    if (type === 'surat_tugas') payloadData.nama_pelaksana = user?.nama;
+
+    // Generate Nomor Surat Otomatis
     if (!config.manualNomor) {
       const validData = data.filter(item => item[config.nomorField]);
       let maxSeq = 0;
@@ -393,21 +391,16 @@ export default function GenericSurat({ type, title }) {
       }
     }
 
-    const res = await apiRequest({
-      action: 'add',
-      sheet: type,
-      data: payloadData,
-      username: user.username,
-      namaFallback: user.nama
-    });
+    // INSERT KE SUPABASE
+    const { error } = await supabase.from(type).insert([payloadData]);
 
-    if (res.success) {
+    if (!error) {
       setShowModal(false);
       setFormData({});
       fetchData();
       notify('success', `${title} berhasil ditambahkan.`);
     } else {
-      setFormError(res.error || 'Gagal menambah data. Silakan coba lagi.');
+      setFormError(error.message || 'Gagal menambah data. Silakan coba lagi.');
     }
     setLoadingSubmit(false);
   };

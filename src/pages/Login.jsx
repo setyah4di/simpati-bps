@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { apiRequest } from '../api';
+import { supabase } from '../supabaseClient'; // Import Supabase client
 import { ArrowLeft, Check, User, Lock, Eye, EyeOff } from 'lucide-react';
 
 function Spinner({ className = 'h-5 w-5 text-white' }) {
@@ -37,6 +37,8 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
+    // Memanggil fungsi login dari AuthContext (yang sudah diupdate ke Supabase)
     const res = await login(username, password);
     if (res.success) {
       setIsEnteringApp(true);
@@ -55,18 +57,28 @@ export default function Login() {
       return;
     }
     setRegLoading(true);
-    const res = await apiRequest({ action: 'register', nama: regNama, username: regUsername, password: regPassword });
-    if (res.success) {
+
+    // Query langsung ke Supabase untuk menambah user baru
+    const { data, error: regError } = await supabase
+      .from('users')
+      .insert([{ nama: regNama, username: regUsername, password: regPassword, role: 'user' }])
+      .select();
+
+    if (!regError) {
       setToastKey((k) => k + 1);
       setShowToast(true);
-      setRegNama(''); setRegPassword(''); setRegConfirmPassword('');
-      setUsername(regUsername); setPassword('');
+      setRegNama(''); 
+      setRegPassword(''); 
+      setRegConfirmPassword('');
+      setUsername(regUsername); 
+      setPassword('');
       setTimeout(() => {
         setShowToast(false);
         setIsRegistering(false);
       }, 2400);
     } else {
-      setError(res.error || 'Gagal melakukan registrasi.');
+      // Jika username sudah dipakai (duplicate key) atau error lainnya
+      setError(regError.message || 'Gagal melakukan registrasi. Username mungkin sudah digunakan.');
     }
     setRegLoading(false);
   };
@@ -85,7 +97,6 @@ export default function Login() {
         <div className="absolute -right-10 -bottom-10 w-56 h-56 rounded-full border border-[#C08A34]/20" aria-hidden="true" />
 
         <div className="relative z-10 flex items-center gap-3">
-          {/* Logo BPS */}
           <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center ring-1 ring-[#C08A34]/40 shrink-0 p-1">
             <img src="/image/logo_bps.png" alt="Logo BPS" className="w-full h-full object-contain" />
           </div>
@@ -123,7 +134,6 @@ export default function Login() {
       {/* ===== Panel form ===== */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-[#F5F6F8] lg:bg-white relative">
         <div className="w-full max-w-sm">
-          {/* Brand ringkas — mobile */}
           <div className="lg:hidden flex flex-col items-center mb-8">
             <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center ring-1 ring-[#C08A34]/40 mb-3 p-1 shadow-sm">
               <img src="/image/logo_bps.png" alt="Logo BPS" className="w-full h-full object-contain" />

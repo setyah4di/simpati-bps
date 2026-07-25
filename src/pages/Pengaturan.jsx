@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { apiRequest } from '../api';
+import { supabase } from '../supabaseClient';
 import { User, Lock, KeyRound, Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 
 export default function Pengaturan() {
@@ -17,23 +17,38 @@ export default function Pengaturan() {
     e.preventDefault();
     setLoading(true);
     setStatus(null);
-    const res = await apiRequest({
-      action: 'changePassword',
-      username: user.username,
-      oldPassword,
-      newUsername,
-      newPassword
-    });
 
-    if (res.success) {
+    // 1. Validasi password lama dengan mencocokkannya di database Supabase
+    const { data: userData, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .eq('password', oldPassword)
+      .single();
+
+    if (fetchError || !userData) {
+      setStatus({ type: 'error', message: 'Password lama yang Anda masukkan salah.' });
+      setLoading(false);
+      return;
+    }
+
+    // 2. Jika password lama benar, lakukan update username & password baru
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ username: newUsername, password: newPassword })
+      .eq('id', user.id);
+
+    if (!updateError) {
       setStatus({ type: 'success', message: 'Username/Password berhasil diubah. Silakan login kembali.' });
+      
       // Update local storage username jika berubah
       const updatedUser = { ...user, username: newUsername };
       localStorage.setItem('user', JSON.stringify(updatedUser));
+      
       setOldPassword('');
       setNewPassword('');
     } else {
-      setStatus({ type: 'error', message: res.error || 'Terjadi kesalahan. Silakan coba lagi.' });
+      setStatus({ type: 'error', message: updateError.message || 'Terjadi kesalahan. Username mungkin sudah digunakan.' });
     }
     setLoading(false);
   };

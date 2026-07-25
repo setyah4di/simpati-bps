@@ -1,35 +1,40 @@
 import { useEffect, useState } from 'react';
-import { apiRequest } from '../api';
+import { supabase } from '../supabaseClient';
 import { MailPlus, MailMinus, Briefcase, Gavel, Files, X, Search, Copy, Check } from 'lucide-react';
 
 const suratConfig = {
   surat_keluar: {
     label: 'Surat Keluar', icon: MailPlus, color: 'bg-blue-500', ring: 'ring-blue-300',
     nomorField: 'nomor_surat_keluar',
+    dateField: 'tanggal_pengajuan',
     tableColumns: ['nomor_surat_keluar', 'nama_pengaju_surat', 'klasifikasi_keamanan_dan_akses', 'tujuan', 'perihal', 'tanggal_surat', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi', 'tanggal_pengajuan'],
     tableLabels: ['Nomor Surat', 'Pengaju Surat', 'Klasifikasi Keamananan dan Akses', 'Tujuan', 'Perihal', 'Tanggal Surat', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi', 'Tanggal Pengajuan'],
   },
   surat_masuk: {
     label: 'Surat Masuk', icon: MailMinus, color: 'bg-green-500', ring: 'ring-green-300',
     nomorField: 'nomor_surat',
+    dateField: 'tanggal_surat',
     tableColumns: ['nomor_surat', 'tanggal_surat', 'pengirim', 'perihal'],
     tableLabels: ['Nomor Surat', 'Tanggal Surat', 'Pengirim', 'Perihal'],
   },
   surat_tugas: {
     label: 'Surat Tugas', icon: Briefcase, color: 'bg-yellow-500', ring: 'ring-yellow-300',
     nomorField: 'nomor_surat_masuk',
+    dateField: 'tanggal_pengajuan',
     tableColumns: ['nomor_surat_masuk', 'klasifikasi_keamanan', 'kegiatan', 'tanggal_mulai_pelaksanaan', 'tanggal_selesai_kegiatan', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
-    tableLabels: ['Nomor Surat', 'Klasifikasi Keamananan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip  ', 'Subklasifikasi', 'Kode Klasifikasi','Tanggal Pengajuan'],
+    tableLabels: ['Nomor Surat', 'Klasifikasi Keamananan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi','Tanggal Pengajuan'],
   },
   surat_keputusan: {
     label: 'Surat Keputusan', icon: Gavel, color: 'bg-purple-500', ring: 'ring-purple-300',
     nomorField: 'nomor_surat',
+    dateField: 'tanggal',
     tableColumns: ['nomor_surat', 'tanggal', 'perihal', 'klasifikasi'],
     tableLabels: ['Nomor Surat', 'Tanggal', 'Perihal', 'Klasifikasi'],
   },
   surat_internal: {
     label: 'Surat Internal', icon: Files, color: 'bg-indigo-500', ring: 'ring-indigo-300',
     nomorField: 'nomor_surat_internal',
+    dateField: 'tanggal_surat',
     tableColumns: ['nomor_surat_internal', 'tanggal_surat', 'pihak_yang_dituju', 'perihal', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi'],
     tableLabels: ['Nomor Surat', 'Tanggal', 'Pihak Dituju', 'Perihal', 'Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi'],
   },
@@ -45,8 +50,31 @@ export default function Dashboard() {
 
   const fetchSummary = async () => {
     setLoading(true);
-    const res = await apiRequest({ action: 'dashboardSummary', date: dateFilter });
-    if (res.success) setSummary(res.data);
+    
+    // Ambil semua data dari kelima tabel secara paralel menggunakan Supabase
+    const tableKeys = Object.keys(suratConfig);
+    const promises = tableKeys.map(async (key) => {
+      const cfg = suratConfig[key];
+      let query = supabase.from(key).select('*');
+      
+      // Jika ada filter tanggal, terapkan filter di sisi database
+      if (dateFilter) {
+        query = query.eq(cfg.dateField, dateFilter);
+      }
+      
+      const { data, error } = await query;
+      return { key, data: error ? [] : data };
+    });
+
+    const results = await Promise.all(promises);
+    
+    // Susun ulang struktur data agar sesuai dengan expektasi state summary
+    const newSummary = {};
+    results.forEach(res => {
+      newSummary[res.key] = { items: res.data };
+    });
+
+    setSummary(newSummary);
     setLoading(false);
   };
 

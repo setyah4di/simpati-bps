@@ -1,5 +1,5 @@
 import { createContext, useState, useContext } from 'react';
-import { apiRequest } from './api';
+import { supabase } from './supabaseClient';
 
 const AuthContext = createContext();
 
@@ -7,12 +7,20 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null);
 
   const login = async (username, password) => {
-    const res = await apiRequest({ action: 'login', username, password });
-    if (res.success) {
-      localStorage.setItem('user', JSON.stringify(res.data));
-      setUser(res.data);
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .eq('password', password)
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: 'Username atau password salah' };
     }
-    return res;
+    
+    localStorage.setItem('user', JSON.stringify(data));
+    setUser(data);
+    return { success: true };
   };
 
   const logout = () => {

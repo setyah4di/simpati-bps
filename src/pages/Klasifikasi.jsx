@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { Plus, Search, X, Check, AlertCircle } from 'lucide-react';
-
+import { supabase } from '../supabaseClient';
 // =========================================================
 // TOAST (notifikasi sukses / gagal bergaya stempel)
 // =========================================================
@@ -63,30 +63,24 @@ export default function Klasifikasi() {
     notify._t = setTimeout(() => setToast(null), duration);
   };
 
-  const fetchData = async () => {
-    setLoading(true);
-    const res = await apiRequest({ action: 'getAll', sheet: 'klasifikasi' });
-    if (res.success) setData(res.data);
-    setLoading(false);
-  };
+ const fetchData = async () => {
+  setLoading(true);
+  const { data, error } = await supabase.from('klasifikasi').select('*').order('id', { ascending: false });
+  if (!error) setData(data);
+  setLoading(false);
+};
 
   useEffect(() => { fetchData(); }, []);
 
   const handleAdd = async (e) => {
-    e.preventDefault();
-    setFormError('');
-    setLoadingSubmit(true);
-    const res = await apiRequest({ action: 'add', sheet: 'klasifikasi', data: formData });
-    if (res.success) {
-      setShowModal(false);
-      setFormData({ klasifikasi_kode_arsip: '', subklasifikasi: '', kode_klasifikasi: '' });
-      fetchData();
-      notify('success', 'Klasifikasi berhasil ditambahkan.');
-    } else {
-      setFormError(res.error || 'Gagal menambah data. Silakan coba lagi.');
-    }
-    setLoadingSubmit(false);
-  };
+  e.preventDefault();
+  const { error } = await supabase.from('klasifikasi').insert([formData]);
+  if (!error) {
+    setShowModal(false);
+    setFormData({ klasifikasi_kode_arsip: '', subklasifikasi: '', kode_klasifikasi: '' });
+    fetchData();
+  }
+};
 
   const filteredData = data.filter(item =>
     Object.values(item).some(val => String(val).toLowerCase().includes(search.toLowerCase()))
