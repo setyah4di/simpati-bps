@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { supabase } from '../supabaseClient'; // Import Supabase client
 import { ArrowLeft, Check, User, Lock, Eye, EyeOff } from 'lucide-react';
+import bcrypt from 'bcryptjs';
 
 function Spinner({ className = 'h-5 w-5 text-white' }) {
   return (
@@ -49,7 +50,7 @@ export default function Login() {
     }
   };
 
-  const handleRegister = async (e) => {
+   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
     if (regPassword !== regConfirmPassword) {
@@ -58,31 +59,36 @@ export default function Login() {
     }
     setRegLoading(true);
 
-    // Query langsung ke Supabase untuk menambah user baru
-    const { data, error: regError } = await supabase
-      .from('users')
-      .insert([{ nama: regNama, username: regUsername, password: regPassword, role: 'user' }])
-      .select();
+    try {
+      // Hash password sebelum dikirim ke database
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(regPassword, salt);
 
-    if (!regError) {
-      setToastKey((k) => k + 1);
-      setShowToast(true);
-      setRegNama(''); 
-      setRegPassword(''); 
-      setRegConfirmPassword('');
-      setUsername(regUsername); 
-      setPassword('');
-      setTimeout(() => {
-        setShowToast(false);
-        setIsRegistering(false);
-      }, 2400);
-    } else {
-      // Jika username sudah dipakai (duplicate key) atau error lainnya
-      setError(regError.message || 'Gagal melakukan registrasi. Username mungkin sudah digunakan.');
+      const { data, error: regError } = await supabase
+        .from('users')
+        .insert([{ nama: regNama, username: regUsername, password: hashedPassword, role: 'user' }])
+        .select();
+
+      if (!regError) {
+        setToastKey((k) => k + 1);
+        setShowToast(true);
+        setRegNama(''); 
+        setRegPassword(''); 
+        setRegConfirmPassword('');
+        setUsername(regUsername); 
+        setPassword('');
+        setTimeout(() => {
+          setShowToast(false);
+          setIsRegistering(false);
+        }, 2400);
+      } else {
+        setError(regError.message || 'Gagal melakukan registrasi. Username mungkin sudah digunakan.');
+      }
+    } catch (err) {
+      setError('Terjadi kesalahan sistem.');
     }
     setRegLoading(false);
   };
-
   const dotPattern = {
     backgroundImage: 'radial-gradient(rgba(233,201,122,0.18) 1px, transparent 1px)',
     backgroundSize: '18px 18px',

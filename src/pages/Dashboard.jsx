@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { MailPlus, MailMinus, Briefcase, Gavel, Files, X, Search, Copy, Check } from 'lucide-react';
 
@@ -47,27 +47,28 @@ export default function Dashboard() {
   const [activeKey, setActiveKey] = useState(null);
   const [tableSearch, setTableSearch] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const tableRef = useRef(null);
 
   const fetchSummary = async () => {
     setLoading(true);
-    
+
     // Ambil semua data dari kelima tabel secara paralel menggunakan Supabase
     const tableKeys = Object.keys(suratConfig);
     const promises = tableKeys.map(async (key) => {
       const cfg = suratConfig[key];
       let query = supabase.from(key).select('*');
-      
+
       // Jika ada filter tanggal, terapkan filter di sisi database
       if (dateFilter) {
         query = query.eq(cfg.dateField, dateFilter);
       }
-      
+
       const { data, error } = await query;
       return { key, data: error ? [] : data };
     });
 
     const results = await Promise.all(promises);
-    
+
     // Susun ulang struktur data agar sesuai dengan expektasi state summary
     const newSummary = {};
     results.forEach(res => {
@@ -79,6 +80,18 @@ export default function Dashboard() {
   };
 
   useEffect(() => { fetchSummary(); }, [dateFilter]);
+
+  // Setiap kali tabel detail dibuka (bukan ditutup), arahkan pandangan/scroll
+  // pengguna ke tabel tersebut — penting di mobile karena tabel muncul di
+  // bawah cards dan sering berada di luar area layar yang terlihat.
+  useEffect(() => {
+    if (activeKey && tableRef.current) {
+      const frame = requestAnimationFrame(() => {
+        tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [activeKey]);
 
   const handleCardClick = (key) => {
     setTableSearch('');
@@ -101,20 +114,20 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-[#101828]">Dashboard</h1>
         <input
           type="date"
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-lg shadow-sm outline-none focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] transition-colors"
+          className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-lg shadow-sm outline-none focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] transition-colors"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
         {loading ? (
           [...Array(5)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+            <div key={i} className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-100">
               <div className="h-8 w-8 rounded-md mb-4 simpati-skeleton"></div>
               <div className="h-4 rounded w-2/3 mb-2 simpati-skeleton"></div>
               <div className="h-8 rounded w-1/3 mt-4 simpati-skeleton"></div>
@@ -132,13 +145,13 @@ export default function Dashboard() {
               <button
                 key={key}
                 onClick={() => handleCardClick(key)}
-                className={`${cfg.color} text-white p-6 rounded-xl shadow-sm text-left cursor-pointer transition-all transform hover:scale-[1.03] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0E2338] ${
+                className={`${cfg.color} text-white p-4 sm:p-6 rounded-xl shadow-sm text-left cursor-pointer transition-all transform hover:scale-[1.03] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0E2338] ${
                   isActive ? `ring-4 ring-offset-2 ${cfg.ring} scale-[1.03] shadow-lg` : ''
                 }`}
               >
-                <cfg.icon className="w-8 h-8 mb-4" />
-                <h3 className="text-lg font-semibold">{cfg.label}</h3>
-                <p className="text-4xl font-bold mt-2">{total}</p>
+                <cfg.icon className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-4" />
+                <h3 className="text-sm sm:text-lg font-semibold leading-snug">{cfg.label}</h3>
+                <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2">{total}</p>
               </button>
             );
           })
@@ -147,32 +160,32 @@ export default function Dashboard() {
 
       {/* Tabel Detail — muncul langsung di bawah cards, bukan modal */}
       {activeCfg && (
-        <div key={activeKey} className="mt-6 simpati-expand-in">
+        <div key={activeKey} ref={tableRef} className="mt-6 simpati-expand-in" style={{ scrollMarginTop: '1rem' }}>
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className={`${activeCfg.color} w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0`}>
                   <activeCfg.icon className="w-[18px] h-[18px]" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-[#101828] leading-tight">Daftar {activeCfg.label}</h2>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-[#101828] leading-tight truncate">Daftar {activeCfg.label}</h2>
                   <p className="text-xs text-slate-500">{filteredItems.length} data ditemukan</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center border border-slate-200 rounded-lg px-3 focus-within:ring-2 focus-within:ring-[#C08A34]/40 focus-within:border-[#C08A34] transition-colors">
+                <div className="flex flex-1 sm:flex-none items-center border border-slate-200 rounded-lg px-3 focus-within:ring-2 focus-within:ring-[#C08A34]/40 focus-within:border-[#C08A34] transition-colors">
                   <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
                   <input
                     type="text"
                     placeholder="Cari di tabel ini..."
                     value={tableSearch}
                     onChange={(e) => setTableSearch(e.target.value)}
-                    className="py-2 text-sm outline-none w-44 sm:w-56"
+                    className="py-2 text-sm outline-none w-full sm:w-56"
                   />
                 </div>
                 <button
                   onClick={() => setActiveKey(null)}
-                  className="hover:bg-slate-100 p-2 rounded-lg text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34]"
+                  className="shrink-0 hover:bg-slate-100 p-2 rounded-lg text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34]"
                   aria-label="Tutup tabel"
                 >
                   <X className="w-5 h-5" />

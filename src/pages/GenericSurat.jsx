@@ -457,22 +457,22 @@ export default function GenericSurat({ type, title }) {
               filteredData.map((item, i) => (
                 <tr key={item.id || i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors simpati-row-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <td className="p-3">{i + 1}</td>
-                  {config.tableColumns.map(col => (
-                    <td key={col} className="p-3">
-                      {col === config.nomorField ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-800">{item[col] || '-'}</span>
-                          {item[col] && (
-                            <button onClick={() => handleCopy(item[col], item.id || i)} className="text-gray-400 hover:text-[#C08A34] transition-colors" title="Salin Nomor Surat">
-                              {copiedId === (item.id || i) ? <Check className="w-4 h-4 text-green-500 simpati-pop-in" /> : <Copy className="w-4 h-4" />}
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        item[col] || '-'
-                      )}
-                    </td>
-                  ))}
+              {config.tableColumns.map(col => (
+              <td key={col} className={`p-3 ${col === config.nomorField ? 'whitespace-nowrap' : ''}`}>
+                {col === config.nomorField ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-800 whitespace-nowrap">{item[col] || '-'}</span>
+                    {item[col] && (
+                      <button onClick={() => handleCopy(item[col], item.id || i)} className="text-gray-400 hover:text-[#C08A34] transition-colors" title="Salin Nomor Surat">
+                        {copiedId === (item.id || i) ? <Check className="w-4 h-4 text-green-500 simpati-pop-in" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  item[col] || '-'
+                )}
+              </td>
+            ))}
                 </tr>
               ))
             )}
