@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Download, Eye, X, FileText, AlertCircle } from 'lucide-react';
-import mammoth from 'mammoth';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { Download, Eye, X, FileText, AlertCircle, Search, XCircle } from 'lucide-react';
+import { renderAsync } from 'docx-preview';
 
 // PENTING: sesuaikan dengan lokasi folder di public.
 // Berdasarkan gambar, struktur foldernya: public/templates/templates/<file>.docx
@@ -40,18 +40,67 @@ const templates = [
   { no: 30, name: 'Laporan Daerah', file: '15.1 laporan daerah.docx' },
   { no: 31, name: 'Telaahan Staf', file: '16. TELAAHAN STAF.docx' },
   { no: 32, name: 'Notula', file: '18. notula.docx' },
+  { no: 33, name: 'Draft Notulensi Rapat', file: '19. Draft Notulensi Rapat.docx' },
+  { no: 34, name: 'Draft Surat Internal', file: '20. Draft Surat Internal.docx' },
+  { no: 35, name: 'Draft Surat Tugas', file: '21. Draft Surat Tugas.docx' },
+  { no: 36, name: 'Draft Surat Undangan', file: '22. Draft Surat Undangan.docx' },
 ];
+
+// Opsi docx-preview: dibuat agar hasil render semirip mungkin dengan file asli
+// (ukuran halaman, margin, font, alignment, tabel, header/footer semua dipertahankan)
+const DOCX_RENDER_OPTIONS = {
+  className: 'docx',
+  inWrapper: true,
+  ignoreWidth: false,
+  // Tinggi halaman dibiarkan menyesuaikan konten (bukan dipotong 29.7cm),
+  // karena breakPages dimatikan di bawah.
+  ignoreHeight: true,
+  ignoreFonts: false,
+  // PENTING: breakPages HARUS false. Saat true, docx-preview mencoba memecah
+  // sendiri baris tabel yang melewati batas halaman (auto page-splitting).
+  // Untuk tabel 2 kolom yang isi tiap kolomnya berbeda jumlah paragraf
+  // (seperti blok "Notulis" vs "Mengetahui"), proses pemecahan otomatis ini
+  // punya bug: salah satu kolom bisa hilang total dari hasil render.
+  // Dengan breakPages: false, dokumen dirender mengalir apa adanya (tanpa
+  // dipecah paksa oleh library) sehingga semua kolom & isi tabel tetap utuh.
+  breakPages: false,
+  ignoreLastRenderedPageBreak: true,
+  experimental: true,
+  trimXmlDeclaration: true,
+  useBase64URL: true,
+  renderChanges: false,
+  renderHeaders: true,
+  renderFooters: true,
+  renderFootnotes: true,
+  renderEndnotes: true,
+  debug: false,
+};
 
 export default function TemplateSurat() {
   const [showPreview, setShowPreview] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   const [previewFile, setPreviewFile] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [downloadingFile, setDownloadingFile] = useState(null);
 
+  // ===== State untuk fitur search =====
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Container tempat docx-preview menyuntikkan halaman hasil render
+  const previewContainerRef = useRef(null);
+
   const getUrl = (file) => BASE_PATH + encodeURIComponent(file);
+
+  const filteredTemplates = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(
+      (tpl) =>
+        tpl.name.toLowerCase().includes(q) ||
+        tpl.file.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
 
   const handleDownload = async (file) => {
     setDownloadingFile(file);
@@ -80,12 +129,10 @@ export default function TemplateSurat() {
     }
   };
 
-  const handlePreview = async (file, name) => {
-    setShowPreview(true);
-    setPreviewTitle(name);
-    setPreviewFile(file);
+  // Render dokumen ke dalam container menggunakan docx-preview,
+  // bukan lagi konversi ke HTML string via mammoth.
+  const renderDocxPreview = useCallback(async (file) => {
     setLoadingPreview(true);
-    setPreviewHtml('');
     setErrorMsg('');
 
     try {
@@ -97,18 +144,79 @@ export default function TemplateSurat() {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const result = await mammoth.convertToHtml({ arrayBuffer });
-      setPreviewHtml(result.value);
+
+      // Bersihkan hasil render sebelumnya agar tidak menumpuk
+      if (previewContainerRef.current) {
+        previewContainerRef.current.innerHTML = '';
+      }
+
+      await renderAsync(
+        arrayBuffer,
+        previewContainerRef.current,
+        previewContainerRef.current,
+        DOCX_RENDER_OPTIONS
+      );
     } catch (error) {
-      setErrorMsg(error.message);
+      console.error(error);
+      setErrorMsg(
+        error?.message ||
+          'Gagal menampilkan preview dokumen. Coba download file untuk melihat isi aslinya.'
+      );
     } finally {
       setLoadingPreview(false);
+    }
+  }, []);
+
+  const handlePreview = (file, name) => {
+    setPreviewTitle(name);
+    setPreviewFile(file);
+    setShowPreview(true);
+  };
+
+  // Trigger render setelah container ter-mount di DOM (saat showPreview jadi true)
+  useEffect(() => {
+    if (showPreview && previewFile) {
+      renderDocxPreview(previewFile);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreview, previewFile]);
+
+  const closePreview = () => {
+    setShowPreview(false);
+    setPreviewFile('');
+    setErrorMsg('');
+    if (previewContainerRef.current) {
+      previewContainerRef.current.innerHTML = '';
     }
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-[#101828]">Template Surat</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-[#101828]">Template Surat</h1>
+
+        {/* ===== Input pencarian ===== */}
+        <div className="relative w-full sm:w-72">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari nama format surat..."
+            className="w-full pl-9 pr-9 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C08A34] focus:border-transparent transition-shadow"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              aria-label="Bersihkan pencarian"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-slate-50 border-b border-slate-100">
@@ -119,38 +227,47 @@ export default function TemplateSurat() {
             </tr>
           </thead>
           <tbody>
-            {templates.map((tpl) => (
-              <tr key={tpl.no} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="p-3">{tpl.no}</td>
-                <td className="p-3 flex items-center text-gray-800 font-medium">
-                  <FileText className="w-4 h-4 mr-2 text-[#C08A34] shrink-0" />
-                  {tpl.name}
-                </td>
-                <td className="p-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => handlePreview(tpl.file, tpl.name)}
-                      className="inline-flex items-center bg-[#0E2338] hover:bg-[#163654] text-white px-3 py-1.5 rounded-lg text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34] focus-visible:ring-offset-1"
-                    >
-                      <Eye className="w-4 h-4 mr-1" /> Preview
-                    </button>
-                    <button
-                      onClick={() => handleDownload(tpl.file)}
-                      disabled={downloadingFile === tpl.file}
-                      className="inline-flex items-center bg-[#C08A34] hover:bg-[#AD7A2C] text-white px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E2338] focus-visible:ring-offset-1"
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      {downloadingFile === tpl.file ? 'Mengunduh...' : 'Download'}
-                    </button>
-                  </div>
+            {filteredTemplates.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="p-8 text-center text-slate-400">
+                  <Search className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+                  Tidak ada format surat yang cocok dengan pencarian "{searchQuery}".
                 </td>
               </tr>
-            ))}
+            ) : (
+              filteredTemplates.map((tpl) => (
+                <tr key={tpl.no} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="p-3">{tpl.no}</td>
+                  <td className="p-3 flex items-center text-gray-800 font-medium">
+                    <FileText className="w-4 h-4 mr-2 text-[#C08A34] shrink-0" />
+                    {tpl.name}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => handlePreview(tpl.file, tpl.name)}
+                        className="inline-flex items-center bg-[#0E2338] hover:bg-[#163654] text-white px-3 py-1.5 rounded-lg text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34] focus-visible:ring-offset-1"
+                      >
+                        <Eye className="w-4 h-4 mr-1" /> Preview
+                      </button>
+                      <button
+                        onClick={() => handleDownload(tpl.file)}
+                        disabled={downloadingFile === tpl.file}
+                        className="inline-flex items-center bg-[#C08A34] hover:bg-[#AD7A2C] text-white px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E2338] focus-visible:ring-offset-1"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        {downloadingFile === tpl.file ? 'Mengunduh...' : 'Download'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* ===== Preview — full screen, dokumen ditampilkan sepenuh 1 halaman A4 ===== */}
+      {/* ===== Preview — full screen, dokumen dirender apa adanya oleh docx-preview ===== */}
       {showPreview && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm simpati-fade-in">
           {/* Toolbar atas */}
@@ -169,7 +286,7 @@ export default function TemplateSurat() {
                 {downloadingFile === previewFile ? 'Mengunduh...' : 'Download'}
               </button>
               <button
-                onClick={() => setShowPreview(false)}
+                onClick={closePreview}
                 className="hover:bg-white/10 p-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 aria-label="Tutup preview"
               >
@@ -178,43 +295,71 @@ export default function TemplateSurat() {
             </div>
           </div>
 
-          {/* Area halaman dokumen — dibuat berukuran A4 sesungguhnya, bukan kotak modal kecil */}
-          <div className="flex-1 overflow-auto bg-slate-300 py-8 px-4">
-            {loadingPreview ? (
-              <div className="flex flex-col items-center justify-center py-24">
+          {/* Area halaman dokumen */}
+          <div className="flex-1 overflow-auto bg-slate-300 py-8 px-4 relative">
+            {loadingPreview && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center py-24 bg-slate-300/90 z-10">
                 <div className="w-12 h-12 rounded-full border-4 border-[#0E2338]/20 border-t-[#0E2338] animate-spin mb-4"></div>
-                <p className="text-slate-100 text-sm">Memuat isi dokumen&hellip;</p>
+                <p className="text-slate-700 text-sm">Memuat isi dokumen&hellip;</p>
               </div>
-            ) : errorMsg ? (
+            )}
+
+            {errorMsg && !loadingPreview && (
               <div className="max-w-lg mx-auto bg-white border border-red-100 text-red-700 p-5 rounded-xl text-sm flex items-start gap-3 shadow-lg">
                 <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
                 <span className="whitespace-pre-wrap">{errorMsg}</span>
               </div>
-            ) : (
-              <div className="mx-auto w-full overflow-x-auto">
-                <div
-                  className="simpati-a4-page mx-auto bg-white shadow-2xl prose prose-sm sm:prose-base max-w-none simpati-page-in"
-                  style={{ fontFamily: 'Times New Roman, serif', lineHeight: '1.5' }}
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
-              </div>
             )}
+
+            {/* Container ini WAJIB selalu ter-mount (tidak di-unmount kondisional)
+                supaya ref-nya tersedia saat renderAsync dipanggil */}
+            <div
+              ref={previewContainerRef}
+              className={`simpati-docx-container mx-auto simpati-page-in ${errorMsg ? 'hidden' : ''}`}
+            />
           </div>
         </div>
       )}
 
       <style>{`
-        /* Ukuran A4 asli (21cm x 29.7cm) dengan margin standar dokumen resmi ~2.5cm */
-        .simpati-a4-page {
-          width: 21cm;
-          min-height: 29.7cm;
-          padding: 2.5cm;
+        /* docx-preview membuat elemen .docx-wrapper > .docx (per halaman) dengan
+           ukuran & margin PERSIS sesuai section properties file aslinya, jadi kita
+           tidak perlu lagi memaksakan ukuran A4 secara manual seperti versi mammoth. */
+        .simpati-docx-container .docx-wrapper {
+          background: transparent;
+          padding: 0;
         }
-        @media (max-width: 900px) {
-          .simpati-a4-page {
-            width: 100%;
-            min-width: 21cm;
-          }
+        .simpati-docx-container .docx-wrapper > .docx {
+          margin-bottom: 1.5rem;
+          box-shadow: 0 10px 30px -5px rgba(0,0,0,0.35);
+        }
+
+        /* PENTING: paksa semua tabel di dalam hasil render docx-preview memakai
+           layout tabel native browser (table/table-row/table-cell), apa pun CSS
+           global di aplikasi ini (mis. reset/CSS tabel responsif dari dashboard
+           lain yang tidak di-scope). Tanpa ini, kolom kanan pada tabel tanda
+           tangan (mis. "Mengetahui, ...") bisa collapse/hilang secara visual
+           walau isinya sebenarnya ada di HTML. */
+        .simpati-docx-container table {
+          display: table !important;
+          width: auto !important;
+          table-layout: auto !important;
+          border-collapse: collapse !important;
+          max-width: none !important;
+        }
+        .simpati-docx-container tbody {
+          display: table-row-group !important;
+        }
+        .simpati-docx-container tr {
+          display: table-row !important;
+        }
+        .simpati-docx-container td,
+        .simpati-docx-container th {
+          display: table-cell !important;
+          float: none !important;
+          width: auto !important;
+          max-width: none !important;
+          vertical-align: top;
         }
 
         @keyframes simpatiFadeIn { from { opacity: 0; } to { opacity: 1; } }

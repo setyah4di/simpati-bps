@@ -21,8 +21,8 @@ const suratConfig = {
     label: 'Surat Tugas', icon: Briefcase, color: 'bg-yellow-500', ring: 'ring-yellow-300',
     nomorField: 'nomor_surat_masuk',
     dateField: 'tanggal_pengajuan',
-    tableColumns: ['nomor_surat_masuk', 'klasifikasi_keamanan', 'kegiatan', 'tanggal_mulai_pelaksanaan', 'tanggal_selesai_kegiatan', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
-    tableLabels: ['Nomor Surat', 'Klasifikasi Keamananan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi','Tanggal Pengajuan'],
+    tableColumns: ['nomor_surat_masuk','nama_pelaksana', 'klasifikasi_keamanan', 'kegiatan', 'tanggal_mulai_pelaksanaan', 'tanggal_selesai_kegiatan', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
+    tableLabels: ['Nomor Surat', 'Nama Pelaksana', 'Klasifikasi Keamananan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi','Tanggal Pengajuan'],
   },
   surat_keputusan: {
     label: 'Surat Keputusan', icon: Gavel, color: 'bg-purple-500', ring: 'ring-purple-300',
