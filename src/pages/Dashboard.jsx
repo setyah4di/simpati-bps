@@ -1,77 +1,71 @@
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import { MailPlus, MailMinus, Briefcase, Gavel, Files, X, Search, Copy, Check } from 'lucide-react';
+import { MailPlus, MailMinus, Briefcase, Gavel, Files, X, Search, ExternalLink, FileText, CalendarRange, RefreshCw, AlertCircle } from 'lucide-react';
+
+// =========================================================
+// KONFIGURASI ENDPOINT GOOGLE APPS SCRIPT (sama dengan ArsipSurat.jsx)
+// =========================================================
+const ARSIP_APPS_SCRIPT_URL = import.meta.env.VITE_ARSIP_APPS_SCRIPT_URL || '';
 
 const suratConfig = {
-  surat_keluar: {
-    label: 'Surat Keluar', icon: MailPlus, color: 'bg-blue-500', ring: 'ring-blue-300',
-    nomorField: 'nomor_surat_keluar',
-    dateField: 'tanggal_pengajuan',
-    tableColumns: ['nomor_surat_keluar', 'nama_pengaju_surat', 'klasifikasi_keamanan_dan_akses', 'tujuan', 'perihal', 'tanggal_surat', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi', 'tanggal_pengajuan'],
-    tableLabels: ['Nomor Surat', 'Pengaju Surat', 'Klasifikasi Keamananan dan Akses', 'Tujuan', 'Perihal', 'Tanggal Surat', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi', 'Tanggal Pengajuan'],
-  },
-  surat_masuk: {
-    label: 'Surat Masuk', icon: MailMinus, color: 'bg-green-500', ring: 'ring-green-300',
-    nomorField: 'nomor_surat',
-    dateField: 'tanggal_surat',
-    tableColumns: ['nomor_surat', 'tanggal_surat', 'pengirim', 'perihal'],
-    tableLabels: ['Nomor Surat', 'Tanggal Surat', 'Pengirim', 'Perihal'],
-  },
-  surat_tugas: {
-    label: 'Surat Tugas', icon: Briefcase, color: 'bg-yellow-500', ring: 'ring-yellow-300',
-    nomorField: 'nomor_surat_masuk',
-    dateField: 'tanggal_pengajuan',
-    tableColumns: ['nomor_surat_masuk','nama_pelaksana', 'klasifikasi_keamanan', 'kegiatan', 'tanggal_mulai_pelaksanaan', 'tanggal_selesai_kegiatan', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
-    tableLabels: ['Nomor Surat', 'Nama Pelaksana', 'Klasifikasi Keamananan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi','Tanggal Pengajuan'],
-  },
-  surat_keputusan: {
-    label: 'Surat Keputusan', icon: Gavel, color: 'bg-purple-500', ring: 'ring-purple-300',
-    nomorField: 'nomor_surat',
-    dateField: 'tanggal',
-    tableColumns: ['nomor_surat', 'tanggal', 'perihal', 'klasifikasi'],
-    tableLabels: ['Nomor Surat', 'Tanggal', 'Perihal', 'Klasifikasi'],
-  },
-  surat_internal: {
-    label: 'Surat Internal', icon: Files, color: 'bg-indigo-500', ring: 'ring-indigo-300',
-    nomorField: 'nomor_surat_internal',
-    dateField: 'tanggal_surat',
-    tableColumns: ['nomor_surat_internal', 'tanggal_surat', 'pihak_yang_dituju', 'perihal', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi'],
-    tableLabels: ['Nomor Surat', 'Tanggal', 'Pihak Dituju', 'Perihal', 'Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi'],
-  },
+  surat_keluar: { label: 'Surat Keluar', icon: MailPlus, color: 'bg-blue-500', ring: 'ring-blue-300' },
+  surat_masuk: { label: 'Surat Masuk', icon: MailMinus, color: 'bg-green-500', ring: 'ring-green-300' },
+  surat_tugas: { label: 'Surat Tugas', icon: Briefcase, color: 'bg-yellow-500', ring: 'ring-yellow-300' },
+  surat_keputusan: { label: 'Surat Keputusan', icon: Gavel, color: 'bg-purple-500', ring: 'ring-purple-300' },
+  surat_internal: { label: 'Surat Internal', icon: Files, color: 'bg-indigo-500', ring: 'ring-indigo-300' },
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes && bytes !== 0) return '-';
+  const num = Number(bytes);
+  if (isNaN(num) || num === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(num) / Math.log(1024));
+  return `${(num / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+};
+
+const formatTanggalID = (value) => {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 export default function Dashboard() {
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeKey, setActiveKey] = useState(null);
   const [tableSearch, setTableSearch] = useState('');
-  const [copiedId, setCopiedId] = useState(null);
   const tableRef = useRef(null);
 
   const fetchSummary = async () => {
+    if (!ARSIP_APPS_SCRIPT_URL) {
+      setSummary(Object.fromEntries(Object.keys(suratConfig).map((key) => [key, { items: [] }])));
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
-    // Ambil semua data dari kelima tabel secara paralel menggunakan Supabase
+    // Ambil daftar arsip dari kelima folder Google Drive secara paralel via Apps Script
     const tableKeys = Object.keys(suratConfig);
     const promises = tableKeys.map(async (key) => {
-      const cfg = suratConfig[key];
-      let query = supabase.from(key).select('*');
-
-      // Jika ada filter tanggal, terapkan filter di sisi database
-      if (dateFilter) {
-        query = query.eq(cfg.dateField, dateFilter);
+      try {
+        const res = await fetch(`${ARSIP_APPS_SCRIPT_URL}?action=list&folder=${key}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        return { key, data: json.files || [] };
+      } catch (err) {
+        console.error(err);
+        return { key, data: [] };
       }
-
-      const { data, error } = await query;
-      return { key, data: error ? [] : data };
     });
 
     const results = await Promise.all(promises);
 
-    // Susun ulang struktur data agar sesuai dengan expektasi state summary
     const newSummary = {};
-    results.forEach(res => {
+    results.forEach((res) => {
       newSummary[res.key] = { items: res.data };
     });
 
@@ -79,7 +73,7 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchSummary(); }, [dateFilter]);
+  useEffect(() => { fetchSummary(); }, []);
 
   // Setiap kali tabel detail dibuka (bukan ditutup), arahkan pandangan/scroll
   // pengguna ke tabel tersebut — penting di mobile karena tabel muncul di
@@ -98,31 +92,89 @@ export default function Dashboard() {
     setActiveKey((prev) => (prev === key ? null : key));
   };
 
-  const handleCopy = (text, id) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const isDateFilterActive = Boolean(dateFrom || dateTo);
+  const clearDateFilter = () => { setDateFrom(''); setDateTo(''); };
+
+  // Terapkan filter rentang tanggal (berdasarkan tanggal upload arsip) ke sebuah daftar file
+  const applyDateFilter = (items) => {
+    if (!isDateFilterActive) return items;
+    return items.filter((f) => {
+      if (!f.uploadedAt) return false;
+      const uploaded = new Date(f.uploadedAt);
+      uploaded.setHours(0, 0, 0, 0);
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (uploaded < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(0, 0, 0, 0);
+        if (uploaded > to) return false;
+      }
+      return true;
+    });
   };
 
   const activeCfg = activeKey ? suratConfig[activeKey] : null;
-  const activeItems = activeKey && summary
-    ? summary[activeKey].items.filter(item => item.id && item.id !== '')
-    : [];
-  const filteredItems = activeItems.filter(item =>
-    tableSearch ? Object.values(item).some(val => String(val).toLowerCase().includes(tableSearch.toLowerCase())) : true
+  const activeItems = activeKey && summary ? applyDateFilter(summary[activeKey].items) : [];
+  const filteredItems = activeItems.filter((item) =>
+    tableSearch ? String(item.name).toLowerCase().includes(tableSearch.toLowerCase()) : true
   );
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold text-[#101828]">Dashboard</h1>
-        <input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-lg shadow-sm outline-none focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] transition-colors"
-        />
+        <div>
+          <h1 className="text-2xl font-bold text-[#101828]">Dashboard</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Ringkasan arsip surat yang tersimpan di Google Drive.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 bg-white shadow-sm">
+            <CalendarRange className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="py-2 outline-none text-sm text-slate-600"
+              aria-label="Dari tanggal"
+            />
+            <span className="text-slate-300 text-sm">s/d</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="py-2 outline-none text-sm text-slate-600"
+              aria-label="Sampai tanggal"
+            />
+            {isDateFilterActive && (
+              <button
+                onClick={clearDateFilter}
+                title="Hapus filter tanggal"
+                className="text-slate-400 hover:text-red-500 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={fetchSummary}
+            title="Muat ulang"
+            className="p-2.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors shrink-0"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
+
+      {!ARSIP_APPS_SCRIPT_URL && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm flex items-start gap-2 mb-4">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            URL Google Apps Script belum diatur. Tambahkan <code className="font-mono">VITE_ARSIP_APPS_SCRIPT_URL</code> pada file <code className="font-mono">.env</code> agar ringkasan arsip dapat ditampilkan.
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
         {loading ? (
@@ -137,8 +189,7 @@ export default function Dashboard() {
           summary && Object.keys(suratConfig).map((key) => {
             const cfg = suratConfig[key];
             const data = summary[key];
-            const validItems = data.items.filter(item => item.id && item.id !== '');
-            const total = Math.max(0, validItems.length);
+            const total = applyDateFilter(data.items).length;
             const isActive = activeKey === key;
 
             return (
@@ -152,6 +203,9 @@ export default function Dashboard() {
                 <cfg.icon className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-4" />
                 <h3 className="text-sm sm:text-lg font-semibold leading-snug">{cfg.label}</h3>
                 <p className="text-2xl sm:text-4xl font-bold mt-1 sm:mt-2">{total}</p>
+                <p className="text-[11px] sm:text-xs text-white/70 mt-1">
+                  {isDateFilterActive ? 'arsip sesuai filter tanggal' : 'total arsip tersimpan'}
+                </p>
               </button>
             );
           })
@@ -168,8 +222,8 @@ export default function Dashboard() {
                   <activeCfg.icon className="w-[18px] h-[18px]" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-bold text-[#101828] leading-tight truncate">Daftar {activeCfg.label}</h2>
-                  <p className="text-xs text-slate-500">{filteredItems.length} data ditemukan</p>
+                  <h2 className="text-base font-bold text-[#101828] leading-tight truncate">Arsip {activeCfg.label}</h2>
+                  <p className="text-xs text-slate-500">{filteredItems.length} arsip ditemukan</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -177,7 +231,7 @@ export default function Dashboard() {
                   <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
                   <input
                     type="text"
-                    placeholder="Cari di tabel ini..."
+                    placeholder="Cari nama file..."
                     value={tableSearch}
                     onChange={(e) => setTableSearch(e.target.value)}
                     className="py-2 text-sm outline-none w-full sm:w-56"
@@ -198,16 +252,17 @@ export default function Dashboard() {
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
                     <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">No</th>
-                    {activeCfg.tableLabels.map(label => (
-                      <th key={label} className="p-3 whitespace-nowrap text-slate-500 font-semibold">{label}</th>
-                    ))}
+                    <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">Nama File</th>
+                    <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">Ukuran</th>
+                    <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">Tanggal Upload</th>
+                    <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={activeCfg.tableLabels.length + 1} className="p-10 text-center text-gray-500">
-                        Tidak ada data
+                      <td colSpan={5} className="p-10 text-center text-gray-500">
+                        {isDateFilterActive || tableSearch ? 'Tidak ada arsip yang cocok dengan filter.' : 'Belum ada arsip yang diunggah.'}
                       </td>
                     </tr>
                   ) : (
@@ -218,30 +273,24 @@ export default function Dashboard() {
                         style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
                       >
                         <td className="p-3">{i + 1}</td>
-                        {activeCfg.tableColumns.map(col => (
-                          <td key={col} className="p-3 whitespace-nowrap">
-                            {col === activeCfg.nomorField ? (
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-800">{item[col] || '-'}</span>
-                                {item[col] && (
-                                  <button
-                                    onClick={() => handleCopy(item[col], item.id || i)}
-                                    className="text-gray-400 hover:text-[#C08A34] transition-colors"
-                                    title="Salin Nomor Surat"
-                                  >
-                                    {copiedId === (item.id || i) ? (
-                                      <Check className="w-4 h-4 text-green-500 simpati-pop-in" />
-                                    ) : (
-                                      <Copy className="w-4 h-4" />
-                                    )}
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              item[col] || '-'
-                            )}
-                          </td>
-                        ))}
+                        <td className="p-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-[#8A611F] shrink-0" />
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap">{formatBytes(item.size)}</td>
+                        <td className="p-3 whitespace-nowrap">{formatTanggalID(item.uploadedAt)}</td>
+                        <td className="p-3">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[#8A611F] hover:text-[#C08A34] text-sm font-medium"
+                          >
+                            Buka <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -265,12 +314,6 @@ export default function Dashboard() {
         }
         .simpati-row-in { animation: simpatiRowIn 0.3s ease-out both; }
 
-        @keyframes simpatiPopIn {
-          from { opacity: 0; transform: scale(0.85); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .simpati-pop-in { animation: simpatiPopIn 0.2s ease-out both; }
-
         @keyframes simpatiShimmer {
           0% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
@@ -282,7 +325,7 @@ export default function Dashboard() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .simpati-expand-in, .simpati-row-in, .simpati-pop-in, .simpati-skeleton {
+          .simpati-expand-in, .simpati-row-in, .simpati-skeleton {
             animation-duration: 0.01ms !important;
             animation-iteration-count: 1 !important;
           }

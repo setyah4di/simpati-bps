@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
-import { Plus, Search, X, Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Search, X, Copy, Check, ChevronDown, AlertCircle, Upload, FileText, Trash2 } from 'lucide-react';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+import { saveAs } from 'file-saver';
 
 // =========================================================
 // KOMPONEN SEARCHABLE DROPDOWN (CUSTOM)
@@ -209,6 +212,74 @@ const SkeletonRow = ({ cols }) => (
 );
 
 // =========================================================
+// KONFIGURASI DELIMITER TAG PADA TEMPLATE
+// Template surat di sini pakai format ${nama_tag}, BUKAN {nama_tag}
+// =========================================================
+const TEMPLATE_DELIMITERS = { start: '${', end: '}' };
+const TAG_REGEX = /\$\{([a-zA-Z0-9_]+)\}/g;
+
+// Baca isi word/document.xml dari file .docx lalu ambil semua nama tag ${...} yang unik
+const extractTemplateTags = async (file) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = new PizZip(arrayBuffer);
+  const docXmlFile = zip.file('word/document.xml');
+  if (!docXmlFile) return [];
+  const xml = docXmlFile.asText();
+  const text = xml.replace(/<[^>]+>/g, ''); // buang tag XML, sisakan teks
+  const tags = new Set();
+  let match;
+  TAG_REGEX.lastIndex = 0;
+  while ((match = TAG_REGEX.exec(text)) !== null) {
+    tags.add(match[1]);
+  }
+  return [...tags];
+};
+
+// Ubah nama_tag_seperti_ini jadi "Nama Tag Seperti Ini" untuk label input
+const prettifyTagLabel = (tag) =>
+  tag
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Tag yang mengandung kata "ttd" atau "tte" dianggap sebagai slot tanda tangan,
+// dan sengaja dibiarkan KOSONG (tidak diminta input, tidak diisi gambar apa pun).
+const SIGNATURE_TAG_PATTERN = /ttd|tte/i;
+const isSignatureTag = (tag) => SIGNATURE_TAG_PATTERN.test(tag);
+
+// =========================================================
+// HELPER: isi template .docx dengan data surat -> Blob
+// =========================================================
+const generateFilledDocument = async (file, templateData) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = new PizZip(arrayBuffer);
+
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: TEMPLATE_DELIMITERS,
+    // Tag teks yang tidak ada datanya akan diisi string kosong, bukan error
+    nullGetter: () => '',
+  });
+
+  doc.render(templateData);
+
+  const outBuffer = doc.getZip().generate({ type: 'arraybuffer' });
+  const blob = new Blob([outBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+
+  return blob;
+};
+
+// Format tanggal ke gaya Indonesia, mis. "20 Agustus 2026"
+const formatTanggalID = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+// =========================================================
 // KOMPONEN UTAMA
 // =========================================================
 export default function GenericSurat({ type, title }) {
@@ -225,6 +296,16 @@ export default function GenericSurat({ type, title }) {
   const [toast, setToast] = useState(null);
 
   const [klasifikasiData, setKlasifikasiData] = useState([]);
+
+  // ------- state untuk fitur template surat -------
+  const [templateFile, setTemplateFile] = useState(null);
+  const [templateFileName, setTemplateFileName] = useState('');
+  const [generatingDocument, setGeneratingDocument] = useState(false);
+  // Tag ${...} di template yang TIDAK bisa diisi otomatis dari data form -> minta user isi manual
+  const [extraTemplateFields, setExtraTemplateFields] = useState([]);
+  const [extraTemplateData, setExtraTemplateData] = useState({});
+  const [scanningTemplate, setScanningTemplate] = useState(false);
+  const [detectedTemplateTags, setDetectedTemplateTags] = useState([]);
 
   const config = tableConfigs[type];
 
@@ -257,6 +338,17 @@ export default function GenericSurat({ type, title }) {
   useEffect(() => {
     fetchData();
     fetchKlasifikasi();
+    // Reset form & state template setiap kali jenis surat berpindah,
+    // supaya tidak ada field dari form jenis surat sebelumnya yang nyangkut
+    // (mis. field "klasifikasi" milik Surat Keputusan ikut terkirim ke Surat Internal).
+    setFormData({});
+    setFormError('');
+    setShowModal(false);
+    setTemplateFile(null);
+    setTemplateFileName('');
+    setExtraTemplateFields([]);
+    setExtraTemplateData({});
+    setDetectedTemplateTags([]);
   }, [type]);
 
   const handleCopy = (text, id) => {
@@ -273,9 +365,124 @@ export default function GenericSurat({ type, title }) {
     return '';
   };
 
+  // Tag yang otomatis punya sumber data (tidak perlu ditanyakan ke user).
+  // Kunci = nama tag di template, value = cara mengambil nilainya dari payload form.
+  // Catatan: nama_pengirim SENGAJA tidak dimasukkan di sini -> dibuat manual (lihat permintaan user),
+  // dan tag yang mengandung "ttd"/"tte" juga tidak di sini karena SENGAJA dibiarkan kosong (lihat isSignatureTag).
+  const getAutoTagResolvers = (payload) => ({
+    // alias umum nomor surat, terlepas dari nama kolom aslinya per jenis surat
+    nomor_naskah: payload[config.nomorField] || '',
+    nomor_surat_final: payload[config.nomorField] || '',
+    // tanggal surat diterbitkan -> pakai tanggal hari ini
+    tanggal_naskah: formatTanggalID(new Date()),
+    judul_surat: title,
+    nama_pemohon: user?.nama || '',
+  });
+
+  // Tentukan tag mana saja di template yang datanya SUDAH tersedia otomatis,
+  // dan tag mana yang perlu diisi manual oleh user (misal nama/jabatan penandatangan).
+  const resolveTemplateFields = (tags) => {
+    const autoResolvers = getAutoTagResolvers(formData);
+    const formFieldNames = config.formFields.map((f) => f.name);
+    const unresolved = tags.filter((tag) => {
+      if (isSignatureTag(tag)) return false; // sengaja dibiarkan kosong, tidak ditanyakan
+      const isAutoTag = Object.prototype.hasOwnProperty.call(autoResolvers, tag);
+      const isFormField = formFieldNames.includes(tag);
+      const isFormattedDate = tag.endsWith('_terformat') && formFieldNames.includes(tag.replace('_terformat', ''));
+      return !isAutoTag && !isFormField && !isFormattedDate;
+    });
+    return unresolved;
+  };
+
+  // ------- handler file template -------
+  const handleTemplateFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      notify('error', 'File template harus berformat .docx');
+      e.target.value = '';
+      return;
+    }
+    setTemplateFile(file);
+    setTemplateFileName(file.name);
+    setExtraTemplateData({});
+    setScanningTemplate(true);
+    try {
+      const tags = await extractTemplateTags(file);
+      if (tags.length === 0) {
+        notify('error', 'Tidak ditemukan tag ${...} pada template ini. Pastikan template memakai format ${nama_tag}.');
+      }
+      setDetectedTemplateTags(tags);
+      const unresolved = resolveTemplateFields(tags);
+      setExtraTemplateFields(unresolved);
+    } catch (err) {
+      console.error(err);
+      notify('error', 'Gagal membaca isi template. Pastikan file .docx tidak rusak.');
+      setExtraTemplateFields([]);
+      setDetectedTemplateTags([]);
+    } finally {
+      setScanningTemplate(false);
+    }
+    e.target.value = '';
+  };
+
+  const removeTemplateFile = () => {
+    setTemplateFile(null);
+    setTemplateFileName('');
+    setExtraTemplateFields([]);
+    setExtraTemplateData({});
+    setDetectedTemplateTags([]);
+  };
+
+  // Susun data yang akan dipakai untuk mengisi tag ${tag} pada template
+  const buildTemplateData = async (payload) => {
+    const templateData = { ...payload, ...getAutoTagResolvers(payload), ...extraTemplateData };
+
+    // Tambahkan versi tanggal terformat ("20 Agustus 2026") untuk tiap field bertipe tanggal
+    Object.keys(payload).forEach((key) => {
+      if (key.toLowerCase().includes('tanggal') && payload[key]) {
+        templateData[`${key}_terformat`] = formatTanggalID(payload[key]);
+      }
+    });
+
+    // Tag tanda tangan (ttd/tte) sengaja dibiarkan kosong
+    const signatureTags = detectedTemplateTags.filter(isSignatureTag);
+    signatureTags.forEach((tag) => {
+      templateData[tag] = '';
+    });
+
+    return templateData;
+  };
+
+  // Isi template dengan data lalu langsung unduh (tanpa preview)
+  const handleGenerateAndDownload = async (payloadData) => {
+    if (!templateFile) return;
+    setGeneratingDocument(true);
+    try {
+      const templateData = await buildTemplateData(payloadData);
+      const blob = await generateFilledDocument(templateFile, templateData);
+      saveAs(blob, `${title.replace(/\s+/g, '_')}_${Date.now()}.docx`);
+    } catch (err) {
+      console.error(err);
+      notify('error', 'Gagal membuat dokumen dari template. Pastikan tag placeholder pada template sudah sesuai (contoh: ${perihal}, ${nomor_naskah}).');
+    } finally {
+      setGeneratingDocument(false);
+    }
+  };
+
   const handleAdd = async (e) => {
     e.preventDefault();
     setFormError('');
+
+    // Validasi: jika template punya tag yang butuh diisi manual, wajib terisi dulu
+    if (templateFile && extraTemplateFields.length > 0) {
+      const belumTerisi = extraTemplateFields.filter((tag) => !String(extraTemplateData[tag] || '').trim());
+      if (belumTerisi.length > 0) {
+        setFormError(`Mohon lengkapi data untuk template: ${belumTerisi.map(prettifyTagLabel).join(', ')}.`);
+        return;
+      }
+    }
+
     setLoadingSubmit(true);
 
     let payloadData = { ...formData };
@@ -391,14 +598,40 @@ export default function GenericSurat({ type, title }) {
       }
     }
 
+    // Saring payload: hanya kirim kolom yang memang valid untuk jenis surat ini,
+    // supaya field nyasar dari form jenis surat lain (jika ada) tidak ikut terkirim
+    // dan memicu error "Could not find the '...' column" dari Supabase.
+    const allowedKeys = new Set([
+      config.nomorField,
+      config.dateField,
+      'kode_klasifikasi',
+      'nama_pengaju_surat',
+      'nama_pelaksana',
+      ...config.formFields.map((f) => f.name),
+    ]);
+    const sanitizedPayloadData = Object.fromEntries(
+      Object.entries(payloadData).filter(([key]) => allowedKeys.has(key))
+    );
+
     // INSERT KE SUPABASE
-    const { error } = await supabase.from(type).insert([payloadData]);
+    const { error } = await supabase.from(type).insert([sanitizedPayloadData]);
 
     if (!error) {
       setShowModal(false);
-      setFormData({});
       fetchData();
       notify('success', `${title} berhasil ditambahkan.`);
+
+      // Jika user melampirkan template, langsung isi otomatis & unduh dokumennya
+      if (templateFile) {
+        await handleGenerateAndDownload(payloadData);
+      }
+
+      setFormData({});
+      setTemplateFile(null);
+      setTemplateFileName('');
+      setExtraTemplateFields([]);
+      setExtraTemplateData({});
+      setDetectedTemplateTags([]);
     } else {
       setFormError(error.message || 'Gagal menambah data. Silakan coba lagi.');
     }
@@ -558,6 +791,80 @@ export default function GenericSurat({ type, title }) {
                     )}
                   </div>
                 ))}
+
+                {/* ================= UPLOAD TEMPLATE SURAT ================= */}
+                {/* Surat masuk tidak menggunakan fitur template surat */}
+                {type !== 'surat_masuk' && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <label className="block text-sm font-medium mb-1 text-slate-700">
+                      Template Surat (.docx) <span className="text-slate-400 font-normal">- Opsional</span>
+                    </label>
+                    <p className="text-xs text-slate-400 mb-2">
+                      Jika diunggah, sistem akan otomatis mengisi nomor surat dan data lain ke dalam template lalu langsung mengunduh hasilnya setelah disimpan.
+                    </p>
+
+                    {!templateFileName ? (
+                      <label className="flex items-center justify-center gap-2 w-full p-4 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-[#C08A34] hover:bg-[#C08A34]/5 transition-colors text-sm text-slate-500">
+                        <Upload className="w-4 h-4" />
+                        Klik untuk pilih file .docx
+                        <input type="file" accept=".docx" onChange={handleTemplateFileChange} className="hidden" />
+                      </label>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 w-full p-3 border border-slate-200 rounded-lg bg-slate-50">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-[#8A611F] shrink-0" />
+                          <span className="text-sm text-slate-700 truncate">{templateFileName}</span>
+                          {scanningTemplate && <span className="text-xs text-slate-400 shrink-0">(memindai tag&hellip;)</span>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeTemplateFile}
+                          className="text-slate-400 hover:text-red-500 shrink-0"
+                          title="Hapus template"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ---- Data tambahan untuk tag di template yang tidak ada di form (tidak berlaku untuk Surat Masuk) ---- */}
+                {type !== 'surat_masuk' && templateFileName && !scanningTemplate && extraTemplateFields.length > 0 && (
+                  <div className="space-y-3 border-t border-slate-100 pt-4">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Data Tambahan untuk Template</p>
+                      <p className="text-xs text-slate-400">
+                        Tag berikut ditemukan di template tapi tidak ada di form ini, mohon lengkapi manual.
+                      </p>
+                    </div>
+                    {extraTemplateFields.map((tag) => (
+                      <div key={tag}>
+                        <label className="block text-sm font-medium mb-1 text-slate-700">{prettifyTagLabel(tag)}</label>
+                        <input
+                          type="text"
+                          required
+                          value={extraTemplateData[tag] || ''}
+                          onChange={(e) => setExtraTemplateData({ ...extraTemplateData, [tag]: e.target.value })}
+                          placeholder={`Isi untuk \${${tag}}`}
+                          className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] outline-none transition-colors"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {type !== 'surat_masuk' && templateFileName && !scanningTemplate && detectedTemplateTags.some(isSignatureTag) && (
+                  <p className="text-xs text-slate-400 -mt-2">
+                    Tag tanda tangan ({detectedTemplateTags.filter(isSignatureTag).join(', ')}) akan dibiarkan kosong pada dokumen hasil.
+                  </p>
+                )}
+
+                {type !== 'surat_masuk' && templateFileName && !scanningTemplate && extraTemplateFields.length === 0 && !detectedTemplateTags.some(isSignatureTag) && (
+                  <p className="text-xs text-emerald-600 -mt-2">
+                    Semua tag pada template bisa terisi otomatis dari form ini.
+                  </p>
+                )}
               </fieldset>
 
               <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
@@ -572,10 +879,23 @@ export default function GenericSurat({ type, title }) {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                  ) : 'Simpan'}
+                  ) : (templateFileName ? 'Simpan & Unduh Dokumen' : 'Simpan')}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= OVERLAY LOADING GENERATE DOKUMEN ================= */}
+      {generatingDocument && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl px-6 py-5 flex items-center gap-3 shadow-xl simpati-pop-in">
+            <svg className="animate-spin h-5 w-5 text-[#0E2338]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm text-slate-600">Menyiapkan dan mengunduh dokumen&hellip;</span>
           </div>
         </div>
       )}

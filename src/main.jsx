@@ -9,6 +9,7 @@ import GenericSurat from './pages/GenericSurat'
 import Klasifikasi from './pages/Klasifikasi'
 import TemplateSurat from './pages/TemplateSurat'
 import Pengaturan from './pages/Pengaturan'
+import ArsipSurat from './pages/ArsipSurat';
 import './index.css'
 
 const ProtectedRoute = ({ children }) => {
@@ -32,6 +33,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/klasifikasi" element={<ProtectedRoute><Klasifikasi /></ProtectedRoute>} />
           <Route path="/template" element={<ProtectedRoute><TemplateSurat /></ProtectedRoute>} />
           <Route path="/pengaturan" element={<ProtectedRoute><Pengaturan /></ProtectedRoute>} />
+          <Route path="/arsip/surat-keluar" element={<ProtectedRoute><ArsipSurat type="surat_keluar" title="Arsip Surat Keluar" /></ProtectedRoute>} />
+          <Route path="/arsip/surat-masuk" element={<ProtectedRoute><ArsipSurat type="surat_masuk" title="Arsip Surat Masuk" /></ProtectedRoute>} />
+          <Route path="/arsip/surat-tugas" element={<ProtectedRoute><ArsipSurat type="surat_tugas" title="Arsip Surat Tugas" /></ProtectedRoute>} />
+          <Route path="/arsip/surat-keputusan" element={<ProtectedRoute><ArsipSurat type="surat_keputusan" title="Arsip Surat Keputusan" /></ProtectedRoute>} />
+          <Route path="/arsip/surat-internal" element={<ProtectedRoute><ArsipSurat type="surat_internal" title="Arsip Surat Internal" /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -1,18 +1,36 @@
-import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import {
-  LayoutDashboard, MailPlus, MailMinus, Briefcase, Gavel, Files,
-  FolderTree, FileText, Settings, LogOut, Menu, X, Building2
+  LayoutDashboard, FolderTree, FileText, Settings, LogOut,
+  Menu, X, Building2, Archive, ChevronDown, Hash
 } from 'lucide-react';
 
-const menu = [
+// Menu paling atas (di atas dropdown Nomor Surat)
+const dashboardMenu = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/surat-keluar', label: 'Surat Keluar', icon: MailPlus },
-  { path: '/surat-masuk', label: 'Surat Masuk', icon: MailMinus },
-  { path: '/surat-tugas', label: 'Surat Tugas', icon: Briefcase },
-  { path: '/surat-keputusan', label: 'Surat Keputusan', icon: Gavel },
-  { path: '/surat-internal', label: 'Surat Internal', icon: Files },
+];
+
+// Sub-menu dropdown "Nomor Surat" -> 5 jenis surat, mengarah ke halaman pengelolaan nomor surat
+const suratMenu = [
+  { path: '/surat-keluar', label: 'Surat Keluar' },
+  { path: '/surat-masuk', label: 'Surat Masuk' },
+  { path: '/surat-tugas', label: 'Surat Tugas' },
+  { path: '/surat-keputusan', label: 'Surat Keputusan' },
+  { path: '/surat-internal', label: 'Surat Internal' },
+];
+
+// Sub-menu dropdown "Arsip" -> 5 jenis surat, mengarah ke halaman daftar arsip Google Drive
+const archiveMenu = [
+  { path: '/arsip/surat-keluar', label: 'Surat Keluar' },
+  { path: '/arsip/surat-masuk', label: 'Surat Masuk' },
+  { path: '/arsip/surat-tugas', label: 'Surat Tugas' },
+  { path: '/arsip/surat-keputusan', label: 'Surat Keputusan' },
+  { path: '/arsip/surat-internal', label: 'Surat Internal' },
+];
+
+// Menu sisanya (di bawah dropdown Arsip)
+const secondaryMenu = [
   { path: '/klasifikasi', label: 'Klasifikasi Surat', icon: FolderTree },
   { path: '/template', label: 'Template Surat', icon: FileText },
   { path: '/pengaturan', label: 'Pengaturan', icon: Settings },
@@ -29,7 +47,24 @@ function getInitials(name) {
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const isSuratActive = suratMenu.some((item) => item.path === location.pathname);
+  const [isSuratOpen, setIsSuratOpen] = useState(isSuratActive);
+
+  const isArsipActive = location.pathname.startsWith('/arsip');
+  const [isArsipOpen, setIsArsipOpen] = useState(isArsipActive);
+
+  // Otomatis buka dropdown yang relevan kalau lagi berada di salah satu halamannya
+  // (mis. setelah reload langsung di /surat-tugas atau /arsip/surat-tugas)
+  useEffect(() => {
+    if (isSuratActive) setIsSuratOpen(true);
+  }, [isSuratActive]);
+
+  useEffect(() => {
+    if (isArsipActive) setIsArsipOpen(true);
+  }, [isArsipActive]);
 
   const handleLogout = () => {
     logout();
@@ -98,11 +133,117 @@ export default function Layout({ children }) {
             Menu Utama
           </p>
           <div className="space-y-1">
-            {menu.map((item) => (
+            {dashboardMenu.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 end={item.path === '/'}
+                onClick={() => setIsSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                <item.icon className="w-[18px] h-[18px] shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </NavLink>
+            ))}
+
+            {/* Dropdown menu Nomor Surat */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsSuratOpen((prev) => !prev)}
+                className={`w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isSuratActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Hash className="w-[18px] h-[18px] shrink-0" />
+                <span className="truncate flex-1 text-left">Nomor Surat</span>
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isSuratOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                  isSuratOpen ? 'max-h-96 opacity-100 mt-1' : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="pl-4 border-l border-white/10 ml-5 space-y-1">
+                  {suratMenu.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsSidebarOpen(false)}
+                      className={({ isActive }) =>
+                        `block px-3 py-2 rounded-lg text-sm font-medium transition-colors truncate ${
+                          isActive
+                            ? 'bg-blue-600/90 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Dropdown menu Arsip */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsArsipOpen((prev) => !prev)}
+                className={`w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isArsipActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Archive className="w-[18px] h-[18px] shrink-0" />
+                <span className="truncate flex-1 text-left">Arsip</span>
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isArsipOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                  isArsipOpen ? 'max-h-96 opacity-100 mt-1' : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className="pl-4 border-l border-white/10 ml-5 space-y-1">
+                  {archiveMenu.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsSidebarOpen(false)}
+                      className={({ isActive }) =>
+                        `block px-3 py-2 rounded-lg text-sm font-medium transition-colors truncate ${
+                          isActive
+                            ? 'bg-blue-600/90 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {secondaryMenu.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
                 onClick={() => setIsSidebarOpen(false)}
                 className={({ isActive }) =>
                   `group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
