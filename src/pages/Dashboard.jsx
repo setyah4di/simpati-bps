@@ -14,6 +14,15 @@ const suratConfig = {
   surat_internal: { label: 'Surat Internal', icon: Files, color: 'bg-indigo-500', ring: 'ring-indigo-300' },
 };
 
+// Warna garis untuk line chart (dalam hex agar kontras terlihat di grafik)
+const chartColors = {
+  surat_keluar: '#3b82f6',     // blue-500
+  surat_masuk: '#22c55e',      // green-500
+  surat_tugas: '#f59e0b',      // amber-500 (lebih terang dari yellow agar terbaca)
+  surat_keputusan: '#a855f7',  // purple-500
+  surat_internal: '#6366f1',   // indigo-500
+};
+
 const formatBytes = (bytes) => {
   if (!bytes && bytes !== 0) return '-';
   const num = Number(bytes);
@@ -30,6 +39,22 @@ const formatTanggalID = (value) => {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
+// Helper: ambil 6 bulan terakhir (termasuk bulan ini)
+const getLast6Months = () => {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      label: d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
+      shortLabel: d.toLocaleDateString('id-ID', { month: 'short' }),
+    });
+  }
+  return months;
+};
+
 export default function Dashboard() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -37,6 +62,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeKey, setActiveKey] = useState(null);
   const [tableSearch, setTableSearch] = useState('');
+  const [hoveredPoint, setHoveredPoint] = useState(null);
   const tableRef = useRef(null);
 
   const fetchSummary = async () => {
@@ -48,7 +74,6 @@ export default function Dashboard() {
 
     setLoading(true);
 
-    // Ambil daftar arsip dari kelima folder Google Drive secara paralel via Apps Script
     const tableKeys = Object.keys(suratConfig);
     const promises = tableKeys.map(async (key) => {
       try {
@@ -75,9 +100,6 @@ export default function Dashboard() {
 
   useEffect(() => { fetchSummary(); }, []);
 
-  // Setiap kali tabel detail dibuka (bukan ditutup), arahkan pandangan/scroll
-  // pengguna ke tabel tersebut — penting di mobile karena tabel muncul di
-  // bawah cards dan sering berada di luar area layar yang terlihat.
   useEffect(() => {
     if (activeKey && tableRef.current) {
       const frame = requestAnimationFrame(() => {
@@ -95,7 +117,6 @@ export default function Dashboard() {
   const isDateFilterActive = Boolean(dateFrom || dateTo);
   const clearDateFilter = () => { setDateFrom(''); setDateTo(''); };
 
-  // Terapkan filter rentang tanggal (berdasarkan tanggal upload arsip) ke sebuah daftar file
   const applyDateFilter = (items) => {
     if (!isDateFilterActive) return items;
     return items.filter((f) => {
@@ -121,6 +142,58 @@ export default function Dashboard() {
   const filteredItems = activeItems.filter((item) =>
     tableSearch ? String(item.name).toLowerCase().includes(tableSearch.toLowerCase()) : true
   );
+
+  // =========================================================
+  // PERSIAPAN DATA LINE CHART (6 bulan terakhir)
+  // =========================================================
+  const months = getLast6Months();
+
+  const chartSeries = summary
+    ? Object.keys(suratConfig).map((key) => {
+        const items = summary[key]?.items || [];
+        const counts = months.map((m) => {
+          return items.filter((item) => {
+            if (!item.uploadedAt) return false;
+            const d = new Date(item.uploadedAt);
+            return d.getFullYear() === m.year && d.getMonth() === m.month;
+          }).length;
+        });
+        return {
+          key,
+          label: suratConfig[key].label,
+          color: chartColors[key],
+          counts,
+        };
+      })
+    : [];
+
+  const maxCount = Math.max(1, ...chartSeries.flatMap((s) => s.counts));
+  const yTicksCount = 4;
+  const yMax = Math.max(yTicksCount, Math.ceil(maxCount / yTicksCount) * yTicksCount);
+
+  // Dimensi chart (viewBox)
+  const chartW = 820;
+  const chartH = 340;
+  const pad = { top: 20, right: 24, bottom: 44, left: 44 };
+  const innerW = chartW - pad.left - pad.right;
+  const innerH = chartH - pad.top - pad.bottom;
+
+  const xStep = months.length > 1 ? innerW / (months.length - 1) : 0;
+  const xScale = (i) => pad.left + i * xStep;
+  const yScale = (v) => pad.top + innerH - (v / yMax) * innerH;
+
+  const buildPath = (counts) =>
+    counts
+      .map((c, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(2)} ${yScale(c).toFixed(2)}`)
+      .join(' ');
+
+  const buildAreaPath = (counts) => {
+    if (!counts.length) return '';
+    const top = counts
+      .map((c, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(2)} ${yScale(c).toFixed(2)}`)
+      .join(' ');
+    return `${top} L ${xScale(counts.length - 1).toFixed(2)} ${yScale(0).toFixed(2)} L ${xScale(0).toFixed(2)} ${yScale(0).toFixed(2)} Z`;
+  };
 
   return (
     <div>
@@ -176,6 +249,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* CARDS RINGKASAN */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
         {loading ? (
           [...Array(5)].map((_, i) => (
@@ -210,6 +284,179 @@ export default function Dashboard() {
             );
           })
         )}
+      </div>
+
+      {/* ============ LINE CHART 6 BULAN TERAKHIR ============ */}
+      <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-100 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-base font-bold text-[#101828]">Tren Arsip Surat 6 Bulan Terakhir</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Jumlah arsip yang diunggah per bulan untuk masing-masing jenis surat.
+            </p>
+          </div>
+        </div>
+
+        {/* Legend / Keterangan */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+          {chartSeries.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: s.color }}></span>
+                <span className="font-medium">{s.label}</span>
+              </span>
+              <span className="text-slate-400">({s.counts.reduce((a, b) => a + b, 0)})</span>
+            </div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="w-full h-[300px] simpati-skeleton rounded-lg"></div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <svg
+              viewBox={`0 0 ${chartW} ${chartH}`}
+              className="w-full h-auto min-w-[560px]"
+              preserveAspectRatio="xMidYMid meet"
+              onMouseLeave={() => setHoveredPoint(null)}
+            >
+            {/* Grid horizontal & label sumbu Y */}
+            {[...Array(yTicksCount + 1)].map((_, i) => {
+              const y = pad.top + (innerH / yTicksCount) * i;
+              const val = yMax - (yMax / yTicksCount) * i;
+              return (
+                <g key={`y-${i}`}>
+                  <line
+                    x1={pad.left}
+                    y1={y}
+                    x2={chartW - pad.right}
+                    y2={y}
+                    stroke="#EEF0F3"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={pad.left - 8}
+                    y={y + 4}
+                    textAnchor="end"
+                    fontSize="11"
+                    fill="#94A3B8"
+                  >
+                    {val}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Label sumbu X (bulan) */}
+            {months.map((m, i) => (
+              <text
+                key={`x-${i}`}
+                x={xScale(i)}
+                y={chartH - pad.bottom + 18}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#94A3B8"
+              >
+                {m.shortLabel}
+              </text>
+            ))}
+
+            {/* Area + Line untuk tiap series */}
+            {chartSeries.map((s) => (
+              <g key={s.key}>
+                <path
+                  d={buildAreaPath(s.counts)}
+                  fill={s.color}
+                  fillOpacity="0.06"
+                  stroke="none"
+                />
+                <path
+                  d={buildPath(s.counts)}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </g>
+            ))}
+
+            {/* Titik (circle) untuk tiap data — ditaruh paling atas agar bisa di-hover */}
+            {chartSeries.map((s) =>
+              s.counts.map((c, i) => {
+                const cx = xScale(i);
+                const cy = yScale(c);
+                const isHovered =
+                  hoveredPoint &&
+                  hoveredPoint.seriesKey === s.key &&
+                  hoveredPoint.monthIndex === i;
+                return (
+                  <g key={`pt-${s.key}-${i}`}>
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={isHovered ? 5.5 : 3.5}
+                      fill="#ffffff"
+                      stroke={s.color}
+                      strokeWidth="2"
+                      style={{ transition: 'r 0.15s ease' }}
+                    />
+                    {/* invisible larger hit area */}
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="12"
+                      fill="transparent"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() =>
+                        setHoveredPoint({ seriesKey: s.key, monthIndex: i, x: cx, y: cy, value: c, label: s.label, month: months[i].label })
+                      }
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                  </g>
+                );
+              })
+            )}
+
+            {/* Tooltip */}
+            {hoveredPoint && hoveredPoint.value > 0 && (
+              <g pointerEvents="none">
+                {(() => {
+                  const tx = Math.min(Math.max(hoveredPoint.x, 60), chartW - 60);
+                  const ty = Math.max(hoveredPoint.y - 14, 30);
+                  return (
+                    <>
+                      <rect
+                        x={tx - 48}
+                        y={ty - 22}
+                        width="96"
+                        height="24"
+                        rx="6"
+                        fill="#0E2338"
+                        opacity="0.95"
+                      />
+                      <text
+                        x={tx}
+                        y={ty - 5}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="#ffffff"
+                        fontWeight="600"
+                      >
+                        {hoveredPoint.value} arsip
+                      </text>
+                    </>
+                  );
+                })()}
+              </g>
+            )}
+          </svg>
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-400 mt-2">
+          Sumbu X: periode bulan (6 bulan terakhir). Sumbu Y: jumlah arsip yang diunggah.
+        </p>
       </div>
 
       {/* Tabel Detail — muncul langsung di bawah cards, bukan modal */}
