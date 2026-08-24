@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'image/simpati2.jpg'],
       manifest: {
-        name: 'Sistem Arsip Surat',
-        short_name: 'ArsipSurat',
+        name: 'Simpati',
+        short_name: 'Simpati',
         description: 'Aplikasi Manajemen Arsip Surat',
         theme_color: '#101828',
         background_color: '#101828',
