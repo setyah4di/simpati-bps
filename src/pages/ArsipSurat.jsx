@@ -318,10 +318,16 @@ export default function ArsipSurat({ type, title }) {
                 <tr key={f.id || i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="p-3">{i + 1}</td>
                   <td className="p-3">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Buka dokumen"
+                      className="flex items-center gap-2 min-w-0 cursor-pointer group"
+                    >
                       <FileText className="w-4 h-4 text-[#8A611F] shrink-0" />
-                      <span className="truncate">{f.name}</span>
-                    </div>
+                      <span className="truncate text-slate-700 group-hover:text-[#C08A34] group-hover:underline transition-colors">{f.name}</span>
+                    </a>
                   </td>
                   <td className="p-3 whitespace-nowrap">{formatBytes(f.size)}</td>
                   <td className="p-3 whitespace-nowrap">{formatTanggalID(f.uploadedAt)}</td>

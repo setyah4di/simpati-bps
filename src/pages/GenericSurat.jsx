@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
-import { Plus, Search, X, Copy, Check, ChevronDown, AlertCircle, Upload, FileText, Trash2 } from 'lucide-react';
+import { Plus, Search, X, Copy, Check, ChevronDown, AlertCircle, Upload, FileText, Trash2, Eye, Pencil } from 'lucide-react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
@@ -91,7 +91,15 @@ const tableConfigs = {
     tableColumns: ['nomor_surat_keluar', 'nama_pengaju_surat', 'klasifikasi_keamanan_dan_akses', 'tujuan', 'perihal', 'tanggal_surat', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
     tableLabels: ['Nomor Surat', 'Pengaju Surat', 'Klasifikasi Keamanan dan Akses', 'Tujuan', 'Perihal', 'Tanggal Surat', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi', 'Tanggal Pengajuan'],
     dateField: 'tanggal_pengajuan',
-    manualNomor: false
+    manualNomor: false,
+    // Kolom ringkas yang ditampilkan di tabel daftar (detail lengkap ada di modal Detail)
+    // Kolom yang ditampilkan di tabel daftar (detail lengkap ada di modal Detail)
+    listColumns: [
+      { field: 'nomor_surat_keluar', label: 'Nomor Surat' },
+      { field: 'tanggal_surat', label: 'Tanggal Surat' },
+      { field: 'perihal', label: 'Perihal' },
+      { field: 'tujuan', label: 'Tujuan' },
+    ]
   },
   surat_masuk: {
     nomorField: 'nomor_surat',
@@ -104,7 +112,13 @@ const tableConfigs = {
     tableColumns: ['nomor_surat', 'tanggal_surat', 'pengirim', 'perihal'],
     tableLabels: ['Nomor Surat', 'Tanggal Surat', 'Pengirim', 'Perihal'],
     dateField: 'tanggal_surat',
-    manualNomor: true
+    manualNomor: true,
+    listColumns: [
+      { field: 'nomor_surat', label: 'Nomor Surat' },
+      { field: 'tanggal_surat', label: 'Tanggal Surat' },
+      { field: 'pengirim', label: 'Pengirim' },
+      { field: 'perihal', label: 'Perihal' },
+    ]
   },
   surat_tugas: {
     nomorField: 'nomor_surat_masuk',
@@ -119,7 +133,13 @@ const tableConfigs = {
     tableColumns: ['nomor_surat_masuk','nama_pelaksana', 'klasifikasi_keamanan', 'kegiatan', 'tanggal_mulai_pelaksanaan', 'tanggal_selesai_kegiatan', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi','tanggal_pengajuan'],
     tableLabels: ['Nomor Surat', 'Nama Pelaksana', 'Klasifikasi Keamanan dan Akses', 'Kegiatan', 'Tgl Mulai', 'Tgl Selesai', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi', 'Tanggal Pengajuan'],
     dateField: 'tanggal_pengajuan',
-    manualNomor: false
+    manualNomor: false,
+    listColumns: [
+      { field: 'nomor_surat_masuk', label: 'Nomor Surat' },
+      { field: 'nama_pelaksana', label: 'Nama Pelaksana' },
+      { field: 'tanggal_pengajuan', label: 'Tanggal Pengajuan' },
+      { field: 'kegiatan', label: 'Kegiatan' },
+    ]
   },
   surat_keputusan: {
     nomorField: 'nomor_surat',
@@ -131,7 +151,14 @@ const tableConfigs = {
     tableColumns: ['nomor_surat', 'tanggal', 'perihal', 'klasifikasi'],
     tableLabels: ['Nomor Surat', 'Tanggal', 'Perihal', 'Klasifikasi'],
     dateField: 'tanggal',
-    manualNomor: false
+    manualNomor: false,
+    // Surat Keputusan tidak punya field "pengaju" & "tanggal pengajuan" tersendiri
+    listColumns: [
+      { field: 'nomor_surat', label: 'Nomor Surat' },
+      { field: 'tanggal', label: 'Tanggal' },
+      { field: 'perihal', label: 'Perihal' },
+      { field: 'klasifikasi', label: 'Klasifikasi' },
+    ]
   },
   surat_internal: {
     nomorField: 'nomor_surat_internal',
@@ -145,7 +172,13 @@ const tableConfigs = {
     tableColumns: ['nomor_surat_internal', 'tanggal_surat', 'pihak_yang_dituju', 'perihal', 'klasifikasi_kode_arsip', 'subklasifikasi', 'kode_klasifikasi'],
     tableLabels: ['Nomor Surat', 'Tanggal', 'Pihak Dituju', 'Perihal', 'Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi'],
     dateField: 'tanggal_surat',
-    manualNomor: false
+    manualNomor: false,
+    listColumns: [
+      { field: 'nomor_surat_internal', label: 'Nomor Surat' },
+      { field: 'tanggal_surat', label: 'Tanggal Surat' },
+      { field: 'perihal', label: 'Perihal' },
+      { field: 'pihak_yang_dituju', label: 'Pihak yang Dituju' },
+    ]
   }
 };
 
@@ -307,6 +340,16 @@ export default function GenericSurat({ type, title }) {
   const [scanningTemplate, setScanningTemplate] = useState(false);
   const [detectedTemplateTags, setDetectedTemplateTags] = useState([]);
 
+  // ------- state untuk aksi Detail / Edit / Hapus -------
+  const [detailItem, setDetailItem] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+  const [editFormError, setEditFormError] = useState('');
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [loadingDelete, setLoadingDelete] = useState(false);
+
   const config = tableConfigs[type];
 
   const notify = (type, message, duration = 3200) => {
@@ -349,6 +392,12 @@ export default function GenericSurat({ type, title }) {
     setExtraTemplateFields([]);
     setExtraTemplateData({});
     setDetectedTemplateTags([]);
+    setDetailItem(null);
+    setShowEditModal(false);
+    setEditItem(null);
+    setEditFormData({});
+    setEditFormError('');
+    setDeleteTarget(null);
   }, [type]);
 
   const handleCopy = (text, id) => {
@@ -638,6 +687,86 @@ export default function GenericSurat({ type, title }) {
     setLoadingSubmit(false);
   };
 
+  // ------- Aksi: Detail -------
+  const openDetail = (item) => setDetailItem(item);
+  const closeDetail = () => setDetailItem(null);
+
+  // ------- Aksi: Edit (nomor surat tidak bisa diubah) -------
+  const openEdit = (item) => {
+    setEditItem(item);
+    setEditFormData({ ...item });
+    setEditFormError('');
+    setShowEditModal(true);
+  };
+
+  const closeEdit = () => {
+    if (loadingEdit) return;
+    setShowEditModal(false);
+    setEditItem(null);
+    setEditFormData({});
+    setEditFormError('');
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setEditFormError('');
+    if (!editItem) return;
+
+    setLoadingEdit(true);
+
+    let payloadData = { ...editFormData };
+
+    // Nomor surat SENGAJA tidak diubah saat edit, meski input di formnya disabled -
+    // dikembalikan paksa ke nilai asli sebagai pengaman ganda.
+    payloadData[config.nomorField] = editItem[config.nomorField];
+
+    // Kode klasifikasi ikut disusun ulang kalau field klasifikasi arsip/subklasifikasi diedit
+    if (!config.formFields.some((f) => f.name === 'kode_klasifikasi') && config.tableColumns.includes('kode_klasifikasi')) {
+      payloadData.kode_klasifikasi = generateKodeKlasifikasi(payloadData.klasifikasi_kode_arsip, payloadData.subklasifikasi);
+    }
+
+    const allowedKeys = new Set([
+      config.dateField,
+      'kode_klasifikasi',
+      ...config.formFields.map((f) => f.name),
+    ]);
+    const sanitizedPayloadData = Object.fromEntries(
+      Object.entries(payloadData).filter(([key]) => allowedKeys.has(key) && key !== config.nomorField)
+    );
+
+    const { error } = await supabase.from(type).update(sanitizedPayloadData).eq('id', editItem.id);
+
+    if (!error) {
+      notify('success', `${title} berhasil diperbarui.`);
+      closeEdit();
+      fetchData();
+    } else {
+      setEditFormError(error.message || 'Gagal memperbarui data. Silakan coba lagi.');
+    }
+    setLoadingEdit(false);
+  };
+
+  // ------- Aksi: Hapus -------
+  const openDeleteConfirm = (item) => setDeleteTarget(item);
+  const closeDeleteConfirm = () => {
+    if (loadingDelete) return;
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setLoadingDelete(true);
+    const { error } = await supabase.from(type).delete().eq('id', deleteTarget.id);
+    if (!error) {
+      notify('success', `${title} berhasil dihapus.`);
+      setDeleteTarget(null);
+      fetchData();
+    } else {
+      notify('error', error.message || 'Gagal menghapus data. Silakan coba lagi.');
+    }
+    setLoadingDelete(false);
+  };
+
   const filteredData = data.filter(item => {
     const matchSearch = Object.values(item).some(val => String(val).toLowerCase().includes(search.toLowerCase()));
     const matchDate = dateFilter ? (item[config.dateField] && String(item[config.dateField]).substring(0,10) === dateFilter) : true;
@@ -672,17 +801,20 @@ export default function GenericSurat({ type, title }) {
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="p-3 text-slate-500 font-semibold">No</th>
-              {config.tableLabels.map(label => <th key={label} className="p-3 whitespace-nowrap text-slate-500 font-semibold">{label}</th>)}
+              {config.listColumns.map((col) => (
+                <th key={col.field} className="p-3 whitespace-nowrap text-slate-500 font-semibold">{col.label}</th>
+              ))}
+              <th className="p-3 whitespace-nowrap text-slate-500 font-semibold">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonRow key={i} cols={config.tableLabels.length} />
+                <SkeletonRow key={i} cols={config.listColumns.length + 1} />
               ))
             ) : filteredData.length === 0 ? (
               <tr>
-                <td colSpan={config.tableLabels.length + 1} className="p-10 text-center text-gray-500 simpati-fade-in">
+                <td colSpan={config.listColumns.length + 2} className="p-10 text-center text-gray-500 simpati-fade-in">
                   Tidak ada data
                 </td>
               </tr>
@@ -690,22 +822,47 @@ export default function GenericSurat({ type, title }) {
               filteredData.map((item, i) => (
                 <tr key={item.id || i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors simpati-row-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <td className="p-3">{i + 1}</td>
-              {config.tableColumns.map(col => (
-              <td key={col} className={`p-3 ${col === config.nomorField ? 'whitespace-nowrap' : ''}`}>
-                {col === config.nomorField ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800 whitespace-nowrap">{item[col] || '-'}</span>
-                    {item[col] && (
-                      <button onClick={() => handleCopy(item[col], item.id || i)} className="text-gray-400 hover:text-[#C08A34] transition-colors" title="Salin Nomor Surat">
-                        {copiedId === (item.id || i) ? <Check className="w-4 h-4 text-green-500 simpati-pop-in" /> : <Copy className="w-4 h-4" />}
+                  {config.listColumns.map((col) => (
+                    <td key={col.field} className="p-3 whitespace-nowrap">
+                      {col.field === config.nomorField ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800 whitespace-nowrap">{item[col.field] || '-'}</span>
+                          {item[col.field] && (
+                            <button onClick={() => handleCopy(item[col.field], item.id || i)} className="text-gray-400 hover:text-[#C08A34] transition-colors" title="Salin Nomor Surat">
+                              {copiedId === (item.id || i) ? <Check className="w-4 h-4 text-green-500 simpati-pop-in" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        item[col.field] || '-'
+                      )}
+                    </td>
+                  ))}
+                  <td className="p-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openDetail(item)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-[#0E2338] hover:bg-slate-100 transition-colors"
+                        title="Lihat Detail"
+                      >
+                        <Eye className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
-                ) : (
-                  item[col] || '-'
-                )}
-              </td>
-            ))}
+                      <button
+                        onClick={() => openEdit(item)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-[#C08A34] hover:bg-slate-100 transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openDeleteConfirm(item)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
@@ -883,6 +1040,197 @@ export default function GenericSurat({ type, title }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL DETAIL SURAT ================= */}
+      {detailItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 simpati-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto simpati-modal-in">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-bold text-[#101828]">Detail {title}</h2>
+              <button onClick={closeDetail} className="hover:bg-slate-100 p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34]">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {config.tableColumns.map((col, i) => (
+                <div key={col} className="grid grid-cols-3 gap-3 py-2 border-b border-slate-50 last:border-0">
+                  <span className="text-sm text-slate-500 col-span-1">{config.tableLabels[i]}</span>
+                  <span className="text-sm text-gray-800 font-medium col-span-2 break-words">
+                    {detailItem[col] || '-'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end p-4 border-t border-slate-100">
+              <button
+                onClick={closeDetail}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL EDIT SURAT (nomor surat tidak bisa diubah) ================= */}
+      {showEditModal && editItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 simpati-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto simpati-modal-in">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-bold text-[#101828]">Edit {title}</h2>
+              <button
+                onClick={closeEdit}
+                disabled={loadingEdit}
+                className="hover:bg-slate-100 p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34]"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} className="p-4 space-y-4">
+              <div className="bg-slate-50 text-slate-500 p-3 rounded-lg text-sm border border-slate-100">
+                Nomor surat tidak dapat diubah.
+              </div>
+
+              {editFormError && (
+                <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2 simpati-fade-in">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{editFormError}</span>
+                </div>
+              )}
+
+              <fieldset
+                disabled={loadingEdit}
+                className={`space-y-4 border-0 p-0 m-0 transition-opacity duration-200 ${loadingEdit ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                {/* Nomor surat ditampilkan read-only di atas form */}
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-slate-700">Nomor Surat</label>
+                  <input
+                    type="text"
+                    value={editItem[config.nomorField] || ''}
+                    disabled
+                    className="w-full p-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+
+                {config.formFields.map((field) => {
+                  // Jika nomor surat termasuk field manual (mis. Surat Masuk), kunci juga di sini
+                  if (field.name === config.nomorField) return null;
+                  return (
+                    <div key={field.name} className="relative">
+                      <label className="block text-sm font-medium mb-1 text-slate-700">{field.label}</label>
+
+                      {field.type === 'select-dynamic' && field.source === 'arsip' && (
+                        <SearchableSelect
+                          value={editFormData[field.name] || ''}
+                          onChange={(val) => setEditFormData({ ...editFormData, [field.name]: val, subklasifikasi: '' })}
+                          options={uniqueKodeArsip}
+                          placeholder={`Pilih ${field.label}`}
+                        />
+                      )}
+
+                      {field.type === 'select-dynamic' && field.source === 'sub' && (
+                        <SearchableSelect
+                          value={editFormData[field.name] || ''}
+                          onChange={(val) => setEditFormData({ ...editFormData, [field.name]: val })}
+                          options={klasifikasiData.filter((k) => k.klasifikasi_kode_arsip === editFormData.klasifikasi_kode_arsip).map((k) => k.subklasifikasi)}
+                          placeholder={`Pilih ${field.label}`}
+                          disabled={!editFormData.klasifikasi_kode_arsip}
+                        />
+                      )}
+
+                      {field.type === 'select' && (
+                        <select
+                          required
+                          value={editFormData[field.name] || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, [field.name]: e.target.value })}
+                          className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] outline-none bg-white transition-colors"
+                        >
+                          <option value="" disabled>Pilih {field.label}</option>
+                          {field.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      )}
+
+                      {field.type !== 'select' && field.type !== 'select-dynamic' && (
+                        <input
+                          type={field.type}
+                          required
+                          value={editFormData[field.name] || ''}
+                          onChange={(e) => setEditFormData({ ...editFormData, [field.name]: e.target.value })}
+                          className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#C08A34]/40 focus:border-[#C08A34] outline-none transition-colors"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </fieldset>
+
+              <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+                {loadingEdit && <span className="text-xs text-slate-400">Menyimpan perubahan&hellip;</span>}
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={loadingEdit}
+                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingEdit}
+                  className="flex items-center justify-center gap-2 bg-[#0E2338] text-white px-6 py-2 rounded-lg hover:bg-[#163654] disabled:opacity-80 transition-colors min-w-[112px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A34] focus-visible:ring-offset-2"
+                >
+                  {loadingEdit ? (
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL KONFIRMASI HAPUS ================= */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 simpati-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm simpati-modal-in">
+            <div className="p-5">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center mb-3">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <h2 className="text-lg font-bold text-[#101828] mb-1">Hapus {title}?</h2>
+              <p className="text-sm text-slate-500">
+                Surat dengan nomor <span className="font-medium text-slate-700">{deleteTarget[config.nomorField] || '-'}</span> akan dihapus permanen dan tidak dapat dikembalikan.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-100">
+              <button
+                onClick={closeDeleteConfirm}
+                disabled={loadingDelete}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={loadingDelete}
+                className="flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-70 transition-colors min-w-[96px]"
+              >
+                {loadingDelete ? (
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : 'Hapus'}
+              </button>
+            </div>
           </div>
         </div>
       )}

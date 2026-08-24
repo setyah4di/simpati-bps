@@ -274,10 +274,16 @@ export default function Dashboard() {
                       >
                         <td className="p-3">{i + 1}</td>
                         <td className="p-3">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Buka dokumen"
+                            className="flex items-center gap-2 min-w-0 cursor-pointer group"
+                          >
                             <FileText className="w-4 h-4 text-[#8A611F] shrink-0" />
-                            <span className="truncate">{item.name}</span>
-                          </div>
+                            <span className="truncate text-slate-700 group-hover:text-[#C08A34] group-hover:underline transition-colors">{item.name}</span>
+                          </a>
                         </td>
                         <td className="p-3 whitespace-nowrap">{formatBytes(item.size)}</td>
                         <td className="p-3 whitespace-nowrap">{formatTanggalID(item.uploadedAt)}</td>
