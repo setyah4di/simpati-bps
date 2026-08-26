@@ -8,7 +8,7 @@ import {
 
 // Menu paling atas (di atas dropdown Nomor Surat)
 const dashboardMenu = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  // { path: '/', label: 'Dashboard', icon: LayoutDashboard },
 ];
 
 // Sub-menu dropdown "Nomor Surat" -> 5 jenis surat, mengarah ke halaman pengelolaan nomor surat
@@ -197,7 +197,7 @@ export default function Layout({ children }) {
             </div>
 
             {/* Dropdown menu Arsip */}
-            <div>
+            {/* <div>
               <button
                 type="button"
                 onClick={() => setIsArsipOpen((prev) => !prev)}
@@ -238,7 +238,7 @@ export default function Layout({ children }) {
                   ))}
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {secondaryMenu.map((item) => (
               <NavLink

@@ -92,8 +92,6 @@ const tableConfigs = {
     tableLabels: ['Nomor Surat', 'Pengaju Surat', 'Klasifikasi Keamanan dan Akses', 'Tujuan', 'Perihal', 'Tanggal Surat', 'Klasifikasi Kode Arsip', 'Subklasifikasi', 'Kode Klasifikasi', 'Tanggal Pengajuan'],
     dateField: 'tanggal_pengajuan',
     manualNomor: false,
-    // Kolom ringkas yang ditampilkan di tabel daftar (detail lengkap ada di modal Detail)
-    // Kolom yang ditampilkan di tabel daftar (detail lengkap ada di modal Detail)
     listColumns: [
       { field: 'nomor_surat_keluar', label: 'Nomor Surat' },
       { field: 'tanggal_surat', label: 'Tanggal Surat' },
@@ -152,7 +150,6 @@ const tableConfigs = {
     tableLabels: ['Nomor Surat', 'Tanggal', 'Perihal', 'Klasifikasi'],
     dateField: 'tanggal',
     manualNomor: false,
-    // Surat Keputusan tidak punya field "pengaju" & "tanggal pengajuan" tersendiri
     listColumns: [
       { field: 'nomor_surat', label: 'Nomor Surat' },
       { field: 'tanggal', label: 'Tanggal' },
@@ -180,6 +177,119 @@ const tableConfigs = {
       { field: 'pihak_yang_dituju', label: 'Pihak yang Dituju' },
     ]
   }
+};
+
+const SATKER_CODE = '15070';
+
+// =========================================================
+// GENERATOR NOMOR SURAT (murni, tanpa side-effect)
+// Dipisah dari handleAdd supaya bisa dipanggil ULANG saat retry
+// jika terjadi tabrakan nomor antar user (lihat handleAdd).
+// =========================================================
+const computeNomorSurat = (type, payloadData, existingData, config) => {
+  const validData = existingData.filter((item) => item[config.nomorField]);
+  let maxSeq = 0;
+  validData.forEach((item) => {
+    const nomor = String(item[config.nomorField]);
+    const match = nomor.match(/(\d+)/);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  });
+
+  const yearNow = new Date().getFullYear();
+  const satker = SATKER_CODE;
+  const kodeKlasifikasi = (payloadData.kode_klasifikasi || '').trim();
+
+  if (type === 'surat_keluar' || type === 'surat_tugas') {
+    const secCode = type === 'surat_keluar'
+      ? (payloadData.klasifikasi_keamanan_dan_akses || 'B').charAt(0)
+      : (payloadData.klasifikasi_keamanan || 'B').charAt(0);
+
+    const dateFieldToCheck = type === 'surat_keluar' ? 'tanggal_surat' : 'tanggal_mulai_pelaksanaan';
+    const tglSurat = new Date(payloadData[dateFieldToCheck]);
+    const tglHariIni = new Date();
+    tglHariIni.setHours(0, 0, 0, 0);
+
+    if (tglSurat < tglHariIni) {
+      const targetSeqStr = String(maxSeq).padStart(3, '0');
+      let maxSuffixChar = 0;
+      const suffixRegex = new RegExp(`-${targetSeqStr}([A-Z])`);
+      validData.forEach((item) => {
+        const nomor = String(item[config.nomorField]);
+        const suffixMatch = nomor.match(suffixRegex);
+        if (suffixMatch && suffixMatch[1]) {
+          const charCode = suffixMatch[1].charCodeAt(0);
+          if (charCode > maxSuffixChar) maxSuffixChar = charCode;
+        }
+      });
+      let suffix = 'A';
+      if (maxSuffixChar > 0) suffix = String.fromCharCode(maxSuffixChar + 1);
+      return kodeKlasifikasi
+        ? `${secCode}-${targetSeqStr}${suffix}/${satker}/${kodeKlasifikasi}/${yearNow}`
+        : `${secCode}-${targetSeqStr}${suffix}/${satker}/${yearNow}`;
+    }
+
+    const newSeq = String(maxSeq + 1).padStart(3, '0');
+    return kodeKlasifikasi
+      ? `${secCode}-${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}`
+      : `${secCode}-${newSeq}/${satker}/${yearNow}`;
+  }
+
+  if (type === 'surat_keputusan') {
+    const dateParts = payloadData.tanggal.split('-');
+    const year = dateParts[0];
+    const month = dateParts[1];
+    const day = dateParts[2];
+    const mmdd = `${month}${day}`;
+    const klasifikasi = (payloadData.klasifikasi || 'KPG').trim();
+    let maxSeqDay = 0;
+    const seqRegex = new RegExp(`^${mmdd}(\\d{3})/`);
+    validData.forEach((item) => {
+      const nomor = String(item[config.nomorField]);
+      const match = nomor.match(seqRegex);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeqDay) maxSeqDay = seq;
+      }
+    });
+    const newSeq = String(maxSeqDay + 1).padStart(3, '0');
+    return `${mmdd}${newSeq}/${satker}/${klasifikasi} TAHUN ${year}`;
+  }
+
+  if (type === 'surat_internal') {
+    const tglSurat = new Date(payloadData.tanggal_surat);
+    const tglHariIni = new Date();
+    tglHariIni.setHours(0, 0, 0, 0);
+
+    if (tglSurat < tglHariIni) {
+      const targetSeqStr = String(maxSeq).padStart(3, '0');
+      let maxSuffixChar = 0;
+      const suffixRegex = new RegExp(`^${targetSeqStr}([A-Z])`);
+      validData.forEach((item) => {
+        const nomor = String(item[config.nomorField]);
+        const suffixMatch = nomor.match(suffixRegex);
+        if (suffixMatch && suffixMatch[1]) {
+          const charCode = suffixMatch[1].charCodeAt(0);
+          if (charCode > maxSuffixChar) maxSuffixChar = charCode;
+        }
+      });
+      let suffix = 'A';
+      if (maxSuffixChar > 0) suffix = String.fromCharCode(maxSuffixChar + 1);
+      return kodeKlasifikasi
+        ? `${targetSeqStr}${suffix}/${satker}/${kodeKlasifikasi}/${yearNow}`
+        : `${targetSeqStr}${suffix}/${satker}/${yearNow}`;
+    }
+
+    const newSeq = String(maxSeq + 1).padStart(3, '0');
+    return kodeKlasifikasi
+      ? `${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}`
+      : `${newSeq}/${satker}/${yearNow}`;
+  }
+
+  const newSeq = String(maxSeq + 1).padStart(3, '0');
+  return kodeKlasifikasi ? `${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${newSeq}/${satker}/${yearNow}`;
 };
 
 // =========================================================
@@ -381,9 +491,6 @@ export default function GenericSurat({ type, title }) {
   useEffect(() => {
     fetchData();
     fetchKlasifikasi();
-    // Reset form & state template setiap kali jenis surat berpindah,
-    // supaya tidak ada field dari form jenis surat sebelumnya yang nyangkut
-    // (mis. field "klasifikasi" milik Surat Keputusan ikut terkirim ke Surat Internal).
     setFormData({});
     setFormError('');
     setShowModal(false);
@@ -414,27 +521,19 @@ export default function GenericSurat({ type, title }) {
     return '';
   };
 
-  // Tag yang otomatis punya sumber data (tidak perlu ditanyakan ke user).
-  // Kunci = nama tag di template, value = cara mengambil nilainya dari payload form.
-  // Catatan: nama_pengirim SENGAJA tidak dimasukkan di sini -> dibuat manual (lihat permintaan user),
-  // dan tag yang mengandung "ttd"/"tte" juga tidak di sini karena SENGAJA dibiarkan kosong (lihat isSignatureTag).
   const getAutoTagResolvers = (payload) => ({
-    // alias umum nomor surat, terlepas dari nama kolom aslinya per jenis surat
     nomor_naskah: payload[config.nomorField] || '',
     nomor_surat_final: payload[config.nomorField] || '',
-    // tanggal surat diterbitkan -> pakai tanggal hari ini
     tanggal_naskah: formatTanggalID(new Date()),
     judul_surat: title,
     nama_pemohon: user?.nama || '',
   });
 
-  // Tentukan tag mana saja di template yang datanya SUDAH tersedia otomatis,
-  // dan tag mana yang perlu diisi manual oleh user (misal nama/jabatan penandatangan).
   const resolveTemplateFields = (tags) => {
     const autoResolvers = getAutoTagResolvers(formData);
     const formFieldNames = config.formFields.map((f) => f.name);
     const unresolved = tags.filter((tag) => {
-      if (isSignatureTag(tag)) return false; // sengaja dibiarkan kosong, tidak ditanyakan
+      if (isSignatureTag(tag)) return false;
       const isAutoTag = Object.prototype.hasOwnProperty.call(autoResolvers, tag);
       const isFormField = formFieldNames.includes(tag);
       const isFormattedDate = tag.endsWith('_terformat') && formFieldNames.includes(tag.replace('_terformat', ''));
@@ -443,7 +542,6 @@ export default function GenericSurat({ type, title }) {
     return unresolved;
   };
 
-  // ------- handler file template -------
   const handleTemplateFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -483,18 +581,15 @@ export default function GenericSurat({ type, title }) {
     setDetectedTemplateTags([]);
   };
 
-  // Susun data yang akan dipakai untuk mengisi tag ${tag} pada template
   const buildTemplateData = async (payload) => {
     const templateData = { ...payload, ...getAutoTagResolvers(payload), ...extraTemplateData };
 
-    // Tambahkan versi tanggal terformat ("20 Agustus 2026") untuk tiap field bertipe tanggal
     Object.keys(payload).forEach((key) => {
       if (key.toLowerCase().includes('tanggal') && payload[key]) {
         templateData[`${key}_terformat`] = formatTanggalID(payload[key]);
       }
     });
 
-    // Tag tanda tangan (ttd/tte) sengaja dibiarkan kosong
     const signatureTags = detectedTemplateTags.filter(isSignatureTag);
     signatureTags.forEach((tag) => {
       templateData[tag] = '';
@@ -503,7 +598,6 @@ export default function GenericSurat({ type, title }) {
     return templateData;
   };
 
-  // Isi template dengan data lalu langsung unduh (tanpa preview)
   const handleGenerateAndDownload = async (payloadData) => {
     if (!templateFile) return;
     setGeneratingDocument(true);
@@ -545,111 +639,6 @@ export default function GenericSurat({ type, title }) {
     if (type === 'surat_keluar') payloadData.nama_pengaju_surat = user?.nama;
     if (type === 'surat_tugas') payloadData.nama_pelaksana = user?.nama;
 
-    // Generate Nomor Surat Otomatis
-    if (!config.manualNomor) {
-      const validData = data.filter(item => item[config.nomorField]);
-      let maxSeq = 0;
-
-      validData.forEach(item => {
-        const nomor = String(item[config.nomorField]);
-        const match = nomor.match(/(\d+)/);
-        if (match) {
-          const seq = parseInt(match[1], 10);
-          if (seq > maxSeq) maxSeq = seq;
-        }
-      });
-
-      const yearNow = new Date().getFullYear();
-      const satker = '15070';
-      const kodeKlasifikasi = (payloadData.kode_klasifikasi || '').trim();
-
-      if (type === 'surat_keluar' || type === 'surat_tugas') {
-        const secCode = type === 'surat_keluar'
-          ? (payloadData.klasifikasi_keamanan_dan_akses || 'B').charAt(0)
-          : (payloadData.klasifikasi_keamanan || 'B').charAt(0);
-
-        const dateFieldToCheck = type === 'surat_keluar' ? 'tanggal_surat' : 'tanggal_mulai_pelaksanaan';
-        const tglSurat = new Date(payloadData[dateFieldToCheck]);
-        const tglHariIni = new Date();
-        tglHariIni.setHours(0, 0, 0, 0);
-
-        let newNomorSurat = '';
-
-        if (tglSurat < tglHariIni) {
-          const targetSeqStr = String(maxSeq).padStart(3, '0');
-          let maxSuffixChar = 0;
-          const suffixRegex = new RegExp(`-${targetSeqStr}([A-Z])`);
-          validData.forEach(item => {
-            const nomor = String(item[config.nomorField]);
-            const suffixMatch = nomor.match(suffixRegex);
-            if (suffixMatch && suffixMatch[1]) {
-              const charCode = suffixMatch[1].charCodeAt(0);
-              if (charCode > maxSuffixChar) maxSuffixChar = charCode;
-            }
-          });
-          let suffix = 'A';
-          if (maxSuffixChar > 0) suffix = String.fromCharCode(maxSuffixChar + 1);
-          newNomorSurat = kodeKlasifikasi ? `${secCode}-${targetSeqStr}${suffix}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${secCode}-${targetSeqStr}${suffix}/${satker}/${yearNow}`;
-        } else {
-          const newSeq = String(maxSeq + 1).padStart(3, '0');
-          newNomorSurat = kodeKlasifikasi ? `${secCode}-${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${secCode}-${newSeq}/${satker}/${yearNow}`;
-        }
-        payloadData[config.nomorField] = newNomorSurat;
-
-      } else if (type === 'surat_keputusan') {
-        const dateParts = payloadData.tanggal.split('-');
-        const year = dateParts[0];
-        const month = dateParts[1];
-        const day = dateParts[2];
-        const mmdd = `${month}${day}`;
-        const klasifikasi = (payloadData.klasifikasi || 'KPG').trim();
-        let maxSeqDay = 0;
-        const seqRegex = new RegExp(`^${mmdd}(\\d{3})/`);
-        validData.forEach(item => {
-          const nomor = String(item[config.nomorField]);
-          const match = nomor.match(seqRegex);
-          if (match) {
-            const seq = parseInt(match[1], 10);
-            if (seq > maxSeqDay) maxSeqDay = seq;
-          }
-        });
-        const newSeq = String(maxSeqDay + 1).padStart(3, '0');
-        payloadData[config.nomorField] = `${mmdd}${newSeq}/${satker}/${klasifikasi} TAHUN ${year}`;
-      } else if (type === 'surat_internal') {
-        const tglSurat = new Date(payloadData.tanggal_surat);
-        const tglHariIni = new Date();
-        tglHariIni.setHours(0, 0, 0, 0);
-        let newNomorSurat = '';
-        if (tglSurat < tglHariIni) {
-          const targetSeqStr = String(maxSeq).padStart(3, '0');
-          let maxSuffixChar = 0;
-          const suffixRegex = new RegExp(`^${targetSeqStr}([A-Z])`);
-          validData.forEach(item => {
-            const nomor = String(item[config.nomorField]);
-            const suffixMatch = nomor.match(suffixRegex);
-            if (suffixMatch && suffixMatch[1]) {
-              const charCode = suffixMatch[1].charCodeAt(0);
-              if (charCode > maxSuffixChar) maxSuffixChar = charCode;
-            }
-          });
-          let suffix = 'A';
-          if (maxSuffixChar > 0) suffix = String.fromCharCode(maxSuffixChar + 1);
-          newNomorSurat = kodeKlasifikasi ? `${targetSeqStr}${suffix}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${targetSeqStr}${suffix}/${satker}/${yearNow}`;
-        } else {
-          const newSeq = String(maxSeq + 1).padStart(3, '0');
-          newNomorSurat = kodeKlasifikasi ? `${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${newSeq}/${satker}/${yearNow}`;
-        }
-        payloadData[config.nomorField] = newNomorSurat;
-      } else {
-        const newSeq = String(maxSeq + 1).padStart(3, '0');
-        const newNomorSurat = kodeKlasifikasi ? `${newSeq}/${satker}/${kodeKlasifikasi}/${yearNow}` : `${newSeq}/${satker}/${yearNow}`;
-        payloadData[config.nomorField] = newNomorSurat;
-      }
-    }
-
-    // Saring payload: hanya kirim kolom yang memang valid untuk jenis surat ini,
-    // supaya field nyasar dari form jenis surat lain (jika ada) tidak ikut terkirim
-    // dan memicu error "Could not find the '...' column" dari Supabase.
     const allowedKeys = new Set([
       config.nomorField,
       config.dateField,
@@ -658,14 +647,73 @@ export default function GenericSurat({ type, title }) {
       'nama_pelaksana',
       ...config.formFields.map((f) => f.name),
     ]);
-    const sanitizedPayloadData = Object.fromEntries(
-      Object.entries(payloadData).filter(([key]) => allowedKeys.has(key))
-    );
 
-    // INSERT KE SUPABASE
-    const { error } = await supabase.from(type).insert([sanitizedPayloadData]);
+    // ===============================================================
+    // PENANGANAN RACE CONDITION NOMOR SURAT (dua user submit bersamaan)
+    // ===============================================================
+    // Nomor surat dibuat di sisi klien dari data yang barusan dibaca, jadi
+    // dua user yang submit hampir bersamaan bisa saja menghitung nomor yang
+    // sama sebelum salah satu insert-nya benar-benar tersimpan.
+    //
+    // Solusinya: perlakukan ini sebagai "optimistic write" lalu retry kalau
+    // gagal. Ini WAJIB dipasangkan dengan UNIQUE constraint pada kolom nomor
+    // surat di database (lihat catatan SQL yang saya kirim terpisah) —
+    // tanpa constraint itu, Postgres akan mengizinkan dua baris dengan nomor
+    // sama dan retry di bawah ini tidak akan pernah terpicu.
+    //
+    // Alur tiap percobaan:
+    //   1. Ambil ulang data terbaru dari tabel (bukan state lama di memori).
+    //   2. Hitung nomor surat berikutnya dari data terbaru itu.
+    //   3. Coba insert.
+    //   4. Kalau gagal karena unique_violation (kode Postgres 23505),
+    //      berarti ada user lain yang barusan "menang" nomor yang sama -
+    //      ulangi dari langkah 1 dengan sedikit jeda acak, sampai maksimal
+    //      MAX_ATTEMPTS kali.
+    // ===============================================================
+    const MAX_ATTEMPTS = 5;
+    let lastError = null;
+    let succeeded = false;
 
-    if (!error) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (!config.manualNomor) {
+        const { data: latestData, error: fetchErr } = await supabase
+          .from(type)
+          .select('*')
+          .order('id', { ascending: false });
+
+        if (fetchErr) {
+          lastError = fetchErr;
+          break;
+        }
+
+        payloadData[config.nomorField] = computeNomorSurat(type, payloadData, latestData || [], config);
+      }
+
+      const sanitizedPayloadData = Object.fromEntries(
+        Object.entries(payloadData).filter(([key]) => allowedKeys.has(key))
+      );
+
+      const { error } = await supabase.from(type).insert([sanitizedPayloadData]);
+
+      if (!error) {
+        succeeded = true;
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+
+      // 23505 = unique_violation di Postgres. Nomor manual (surat_masuk) tidak
+      // di-retry otomatis karena nomornya memang input bebas dari user.
+      const isNomorClash = error.code === '23505' && !config.manualNomor;
+      if (!isNomorClash) break;
+
+      // Jeda kecil + acak sebelum mencoba lagi, supaya beberapa user yang
+      // tabrakan bersamaan tidak langsung tabrakan lagi di percobaan berikutnya.
+      await new Promise((resolve) => setTimeout(resolve, 150 + Math.random() * 250));
+    }
+
+    if (succeeded) {
       setShowModal(false);
       fetchData();
       notify('success', `${title} berhasil ditambahkan.`);
@@ -682,7 +730,12 @@ export default function GenericSurat({ type, title }) {
       setExtraTemplateData({});
       setDetectedTemplateTags([]);
     } else {
-      setFormError(error.message || 'Gagal menambah data. Silakan coba lagi.');
+      const isNomorClash = lastError?.code === '23505' && !config.manualNomor;
+      setFormError(
+        isNomorClash
+          ? 'Nomor surat berulang kali bentrok dengan pengajuan lain yang masuk hampir bersamaan. Silakan coba simpan sekali lagi.'
+          : (lastError?.message || 'Gagal menambah data. Silakan coba lagi.')
+      );
     }
     setLoadingSubmit(false);
   };
@@ -716,11 +769,8 @@ export default function GenericSurat({ type, title }) {
 
     let payloadData = { ...editFormData };
 
-    // Nomor surat SENGAJA tidak diubah saat edit, meski input di formnya disabled -
-    // dikembalikan paksa ke nilai asli sebagai pengaman ganda.
     payloadData[config.nomorField] = editItem[config.nomorField];
 
-    // Kode klasifikasi ikut disusun ulang kalau field klasifikasi arsip/subklasifikasi diedit
     if (!config.formFields.some((f) => f.name === 'kode_klasifikasi') && config.tableColumns.includes('kode_klasifikasi')) {
       payloadData.kode_klasifikasi = generateKodeKlasifikasi(payloadData.klasifikasi_kode_arsip, payloadData.subklasifikasi);
     }
@@ -950,7 +1000,6 @@ export default function GenericSurat({ type, title }) {
                 ))}
 
                 {/* ================= UPLOAD TEMPLATE SURAT ================= */}
-                {/* Surat masuk tidak menggunakan fitur template surat */}
                 {type !== 'surat_masuk' && (
                   <div className="pt-2 border-t border-slate-100">
                     <label className="block text-sm font-medium mb-1 text-slate-700">
@@ -986,7 +1035,6 @@ export default function GenericSurat({ type, title }) {
                   </div>
                 )}
 
-                {/* ---- Data tambahan untuk tag di template yang tidak ada di form (tidak berlaku untuk Surat Masuk) ---- */}
                 {type !== 'surat_masuk' && templateFileName && !scanningTemplate && extraTemplateFields.length > 0 && (
                   <div className="space-y-3 border-t border-slate-100 pt-4">
                     <div>
@@ -1106,7 +1154,6 @@ export default function GenericSurat({ type, title }) {
                 disabled={loadingEdit}
                 className={`space-y-4 border-0 p-0 m-0 transition-opacity duration-200 ${loadingEdit ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                {/* Nomor surat ditampilkan read-only di atas form */}
                 <div>
                   <label className="block text-sm font-medium mb-1 text-slate-700">Nomor Surat</label>
                   <input
@@ -1118,7 +1165,6 @@ export default function GenericSurat({ type, title }) {
                 </div>
 
                 {config.formFields.map((field) => {
-                  // Jika nomor surat termasuk field manual (mis. Surat Masuk), kunci juga di sini
                   if (field.name === config.nomorField) return null;
                   return (
                     <div key={field.name} className="relative">
