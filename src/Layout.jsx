@@ -197,7 +197,7 @@ export default function Layout({ children }) {
             </div>
 
             {/* Dropdown menu Arsip */}
-            {/* <div>
+            <div>
               <button
                 type="button"
                 onClick={() => setIsArsipOpen((prev) => !prev)}
@@ -238,7 +238,7 @@ export default function Layout({ children }) {
                   ))}
                 </div>
               </div>
-            </div> */}
+            </div>
 
             {secondaryMenu.map((item) => (
               <NavLink
