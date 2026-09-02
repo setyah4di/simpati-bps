@@ -3,47 +3,26 @@ import { Download, Eye, X, FileText, AlertCircle, Search, XCircle } from 'lucide
 import { renderAsync } from 'docx-preview';
 
 // PENTING: sesuaikan dengan lokasi folder di public.
-// Berdasarkan gambar, struktur foldernya: public/templates/templates/<file>.docx
-const BASE_PATH = '/templates/templates/';
+// Struktur folder: public/templates/<file>
+const BASE_PATH = '/templates/';
 
-// Daftar file SESUAI dengan yang ada di folder public/templates/templates/
+// Daftar file SESUAI dengan yang ada di folder public/templates/
 const templates = [
-  // { no: 1, name: 'Instruksi Lembaga', file: '1. Instruksi lembaga.docx' },
-  // { no: 2, name: 'Surat Edaran Kepala', file: '2. surat edaran kepala.docx' },
-  // { no: 3, name: 'Surat Edaran Pusat', file: '2. surat edaran pusat.docx' },
-  // { no: 4, name: 'Surat Edaran Daerah', file: '2.1 surat edaran daerah.docx' },
-  // { no: 5, name: 'Keputusan (Logo Garuda)', file: '3. KEPUTUSAN logo garuda.docx' },
-  // { no: 6, name: 'Keputusan (Logo BPS)', file: '3.1 KEPUTUSAN logo bps.docx' },
-  // { no: 7, name: 'Keputusan (Logo BPS - Salinan)', file: '3.2 KEPUTUSAN logo bps - salinan.docx' },
-  // { no: 8, name: 'Surat Perintah Kepala', file: '4.1 surat perintah kepala.docx' },
-  // { no: 9, name: 'Surat Perintah Pusat', file: '4.1.1 surat perintah pusat.docx' },
-  // { no: 10, name: 'Surat Perintah Daerah', file: '4.1.2 surat perintah daerah.docx' },
-  // { no: 11, name: 'Nota Dinas', file: '5. nota dinas.docx' },
-  // { no: 12, name: 'Memorandum', file: '6. memorandum.docx' },
-  // { no: 13, name: 'Undangan Intern Pusat', file: '7. undangan intern pusat.docx' },
-  // { no: 14, name: 'Undangan Intern Kepala', file: '7.1 undangan intern kepala.docx' },
-  // { no: 15, name: 'Undangan Intern Daerah', file: '7.3 undangan intern daerah.docx' },
-  // { no: 16, name: 'Surat Dinas Kepala', file: '8. surat dinas kepala.docx' },
-  // { no: 17, name: 'Surat Dinas Pusat', file: '8.1 surat dinas pusat.docx' },
-  // { no: 18, name: 'Surat Dinas Daerah', file: '8.2 surat dinas daerah.docx' },
-  // { no: 19, name: 'Surat Kuasa', file: '10. surat kuasa.docx' },
-  // { no: 20, name: 'Berita Acara', file: '11. berita acara.docx' },
-  // { no: 21, name: 'Berita Acara Daerah', file: '11.1 berita acara daerah.docx' },
-  // { no: 22, name: 'Surat Keterangan', file: '12. surat keterangan.docx' },
-  // { no: 23, name: 'Surat Keterangan Daerah', file: '12.1 surat keterangan daerah.docx' },
-  // { no: 24, name: 'Surat Keterangan Tentang Hal/Peristiwa', file: '12.2 surat keterangan tentang hal atau peristiwa.docx' },
-  // { no: 25, name: 'Surat Pengantar', file: '13. surat pengantar.docx' },
-  // { no: 26, name: 'Surat Pengantar Daerah', file: '13.1 surat pengantar daerah.docx' },
-  // { no: 27, name: 'Pengumuman', file: '14. pengumuman.docx' },
-  // { no: 28, name: 'Pengumuman Daerah', file: '14.1 pengumuman daerah.docx' },
-  // { no: 29, name: 'Laporan', file: '15. laporan.docx' },
-  // { no: 30, name: 'Laporan Daerah', file: '15.1 laporan daerah.docx' },
-  // { no: 31, name: 'Telaahan Staf', file: '16. TELAAHAN STAF.docx' },
-  // { no: 32, name: 'Notula', file: '18. notula.docx' },
-  { no: 1, name: 'Draft Notulensi Rapat', file: '19. Draft Notulensi Rapat.docx' },
-  { no: 2, name: 'Draft Surat Internal', file: '20. Draft Surat Internal.docx' },
-  { no: 3, name: 'Draft Surat Tugas', file: '21. Draft Surat Tugas.docx' },
-  { no: 4, name: 'Draft Surat Undangan', file: '22. Draft Surat Undangan.docx' },
+  { no: 1, name: 'Draft Laporan Bernomor', file: 'Draft Laporan bernomor.docx' },
+  { no: 2, name: 'Draft MoU BPS dan An Nadwah', file: 'Draft MoU BPS dan An Nadwah.docx' },
+  { no: 3, name: 'Draft Notulensi Rapat', file: 'Draft Notulensi Rapat.docx' },
+  { no: 4, name: 'Draft Pengumuman Internal', file: 'Draft Pengumuman Internal.docx' },
+  { no: 5, name: 'Draft Surat Dinas Undangan Eksternal', file: 'Draft Surat Dinas Undangan Eksternal.docx' },
+  { no: 6, name: 'Draft Surat Dinas Undangan Internal', file: 'Draft Surat Dinas Undangan Internal.docx' },
+  { no: 7, name: 'Draft Surat Pengantar', file: 'Draft Surat Pengantar.docx' },
+  { no: 8, name: 'Draft Surat Permintaan Data PDAM', file: 'Draft Surat Permintaan Data PDAM.docx' },
+  { no: 9, name: 'Draft Surat Tugas Mitra', file: 'Draft Surat Tugas Mitra.docx' },
+  { no: 10, name: 'Draft Surat Tugas Organik', file: 'Draft Surat Tugas Organik.docx' },
+  { no: 11, name: 'Pedoman Pengajuan TTD di SRIKANDI (Word)', file: 'Pedoman Pengajuan TTD di SRIKANDI.docx' },
+  { no: 12, name: 'Pedoman Pengajuan TTD di SRIKANDI (PDF)', file: 'Pedoman Pengajuan TTD di SRIKANDI.pdf' },
+  { no: 13, name: 'Template SK KPA Kegiatan Kecil (Daftar Mitra)', file: 'Template SK KPA Kegiatan Kecil (daftar mitra).docx' },
+  { no: 14, name: 'Template SK Tim', file: 'Template SK Tim.docx' },
+  { no: 15, name: 'Template SPK Petugas Lapangan', file: 'Template_SPK Petugas Lapangan.docx' },
 ];
 
 // Opsi docx-preview: dibuat agar hasil render semirip mungkin dengan file asli
@@ -75,6 +54,9 @@ const DOCX_RENDER_OPTIONS = {
   renderEndnotes: true,
   debug: false,
 };
+
+// Helper: ambil ekstensi file (huruf kecil, tanpa titik)
+const getExt = (file) => (file.split('.').pop() || '').toLowerCase();
 
 export default function TemplateSurat() {
   const [showPreview, setShowPreview] = useState(false);
@@ -129,8 +111,10 @@ export default function TemplateSurat() {
     }
   };
 
-  // Render dokumen ke dalam container menggunakan docx-preview,
-  // bukan lagi konversi ke HTML string via mammoth.
+  // Render dokumen ke dalam container menggunakan docx-preview.
+  // Untuk file .docx pakai docx-preview; untuk .pdf browser sudah punya
+  // native PDF viewer jadi cukup ditampilkan lewat <iframe>/<embed> (lihat
+  // bagian render JSX di bawah), fungsi ini hanya dipakai untuk docx.
   const renderDocxPreview = useCallback(async (file) => {
     setLoadingPreview(true);
     setErrorMsg('');
@@ -173,11 +157,21 @@ export default function TemplateSurat() {
     setShowPreview(true);
   };
 
-  // Trigger render setelah container ter-mount di DOM (saat showPreview jadi true)
+  const isPdf = previewFile && getExt(previewFile) === 'pdf';
+
+  // Trigger render setelah container ter-mount di DOM (saat showPreview jadi true).
+  // Untuk PDF tidak perlu docx-preview, cukup set loading selesai karena
+  // <iframe> yang menangani rendering sendiri.
   useEffect(() => {
-    if (showPreview && previewFile) {
-      renderDocxPreview(previewFile);
+    if (!showPreview || !previewFile) return;
+
+    if (getExt(previewFile) === 'pdf') {
+      setErrorMsg('');
+      setLoadingPreview(false);
+      return;
     }
+
+    renderDocxPreview(previewFile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPreview, previewFile]);
 
@@ -267,7 +261,7 @@ export default function TemplateSurat() {
         </table>
       </div>
 
-      {/* ===== Preview — full screen, dokumen dirender apa adanya oleh docx-preview ===== */}
+      {/* ===== Preview — full screen ===== */}
       {showPreview && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm simpati-fade-in">
           {/* Toolbar atas */}
@@ -311,11 +305,21 @@ export default function TemplateSurat() {
               </div>
             )}
 
-            {/* Container ini WAJIB selalu ter-mount (tidak di-unmount kondisional)
-                supaya ref-nya tersedia saat renderAsync dipanggil */}
+            {/* PDF ditampilkan lewat iframe native browser */}
+            {isPdf && !errorMsg && (
+              <iframe
+                title={previewTitle}
+                src={getUrl(previewFile)}
+                className="w-full h-full min-h-[80vh] mx-auto bg-white rounded-lg shadow-lg"
+              />
+            )}
+
+            {/* Container docx-preview ini WAJIB selalu ter-mount (tidak di-unmount
+                kondisional) supaya ref-nya tersedia saat renderAsync dipanggil.
+                Disembunyikan saat file yang di-preview adalah PDF atau saat error. */}
             <div
               ref={previewContainerRef}
-              className={`simpati-docx-container mx-auto simpati-page-in ${errorMsg ? 'hidden' : ''}`}
+              className={`simpati-docx-container mx-auto simpati-page-in ${errorMsg || isPdf ? 'hidden' : ''}`}
             />
           </div>
         </div>
